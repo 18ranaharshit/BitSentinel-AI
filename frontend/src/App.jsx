@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
-const API_BASE = 'http://localhost:8005';
-const WS_URL = 'ws://localhost:8005/ws/stream';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005';
+const WS_URL = import.meta.env.VITE_WS_URL || (
+  API_BASE.startsWith('https://') 
+    ? API_BASE.replace('https://', 'wss://') + '/ws/stream'
+    : API_BASE.replace('http://', 'ws://') + '/ws/stream'
+);
+
+
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
