@@ -3,10 +3,12 @@
 Raw Block Feature Extraction & Real-Time Fraud Inference Engine
 ==============================================================================
 1. Scans raw block JSON files from raw data/600000-605999.
-2. Extracts transaction-level features (inputs/outputs count, values, fees, locktime).
-3. Extracts address-level behavioral features from block outputs/inputs.
-4. Loads trained models (Elliptic & BABD-13) from models/.
-5. Runs fraud inference on live block data and reports top suspicious transactions/addresses.
+2. Extracts transaction-level features and computes heuristic risk scores.
+3. Extracts address-level honest behavioral features from block outputs/inputs:
+     - total_received, tx_count, avg_value_per_tx, active_duration_sec, tx_frequency
+4. Loads trained reduced-feature BABD-13 model (models/babd13_reduced_model.pkl).
+5. Runs address classification on real derived features (NO random noise).
+6. Exports raw_block_predictions.csv and raw_address_predictions.csv for search & API.
 ==============================================================================
 """
 
@@ -16,10 +18,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import torch
+from feature_utils import calculate_tx_heuristic_score, build_elliptic_proxy_features
 
 RAW_BLOCKS_DIR = Path("raw data/600000-605999")
 MODELS_DIR = Path("models")
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 SEP = "=" * 80
 
@@ -27,34 +30,37 @@ print(f"\n{SEP}")
 print("  RAW BLOCK FEATURE EXTRACTION & FRAUD INFERENCE ENGINE")
 print(SEP)
 
+# Startup Disclaimer & Transparency Note
+print("\n[TRANSPARENCY NOTE]")
+print("  NOTE: heuristic_score is a rule-based proxy, not the trained ML model's output,")
+print("  because raw block transactions lack ground-truth labels needed to validate")
+print("  a proxy model against Elliptic's PCA-anonymized feature space.")
+print("  Address classifications are ML-driven using the trained reduced BABD-13 model.")
+
 # 1. Load trained models
 print("\n[1] Loading trained model artifacts ...")
 
-# Load BABD-13 model
-babd_model_path = MODELS_DIR / "babd13_best_model.pkl"
-with open(babd_model_path, "rb") as f:
+babd_reduced_path = MODELS_DIR / "babd13_reduced_model.pkl"
+if not babd_reduced_path.exists():
+    raise FileNotFoundError(
+        f"Missing {babd_reduced_path}! Please run 'python train_babd13_reduced_model.py' first."
+    )
+
+with open(babd_reduced_path, "rb") as f:
     babd_artifact = pickle.load(f)
 
 babd_model = babd_artifact["model"]
-babd_feature_cols = babd_artifact["feature_cols"]
+feature_names = babd_artifact["feature_names"]
 idx_to_label = babd_artifact["idx_to_label"]
+label_names = babd_artifact["label_names"]
 
-print(f"    Loaded BABD-13 Model: {type(babd_model).__name__}")
-
-# Load Elliptic XGBoost or GCN model
-elliptic_model_path = MODELS_DIR / "elliptic_xgb_hybrid.pkl"
-if elliptic_model_path.exists():
-    with open(elliptic_model_path, "rb") as f:
-        elliptic_model = pickle.load(f)
-    print(f"    Loaded Elliptic Model: XGBoost Hybrid")
-else:
-    elliptic_model = None
-    print("    Elliptic Model Checkpoint: Will use raw feature rule-based scoring")
+print(f"    Loaded Reduced BABD-13 Address Classifier: {type(babd_model).__name__}")
+print(f"    Features Expected: {feature_names}")
 
 # 2. Parse sample blocks from raw block dataset
 print("\n[2] Parsing sample blocks from raw block dataset (600000-605999) ...")
 block_folders = sorted([d for d in RAW_BLOCKS_DIR.iterdir() if d.is_dir()])
-sample_folders = block_folders[:20]  # Process 20 blocks for demonstration
+sample_folders = block_folders[:20]  # Process 20 blocks for inference
 
 parsed_txs = []
 address_stats = {}
@@ -77,6 +83,8 @@ for bfolder in sample_folders:
                 out_val = tx.get("outputs_value", 0)
                 size = tx.get("size", 0)
                 
+                heuristic_score = calculate_tx_heuristic_score(tx)
+
                 parsed_txs.append({
                     "tx_hash": tx_hash,
                     "block_height": b_height,
@@ -88,7 +96,9 @@ for bfolder in sample_folders:
                     "outputs_value": out_val,
                     "size": size,
                     "value_btc": out_val / 1e8,
-                    "fee_btc": fee / 1e8
+                    "fee_btc": fee / 1e8,
+                    "heuristic_score": heuristic_score,
+                    "is_high_risk": heuristic_score >= 0.70
                 })
                 
                 # Extract outputs for address behavioral tracking
@@ -100,75 +110,95 @@ for bfolder in sample_folders:
                             if addr not in address_stats:
                                 address_stats[addr] = {
                                     "tx_count": 0,
-                                    "total_received": 0,
+                                    "total_received": 0.0,
                                     "first_seen": b_time,
                                     "last_seen": b_time
                                 }
                             address_stats[addr]["tx_count"] += 1
-                            address_stats[addr]["total_received"] += val / 1e8
+                            address_stats[addr]["total_received"] += float(val) / 1e8
                             address_stats[addr]["last_seen"] = max(address_stats[addr]["last_seen"], b_time)
                             
-        except Exception as e:
+        except Exception:
             continue
 
 df_parsed_txs = pd.DataFrame(parsed_txs)
 print(f"    Successfully parsed {len(df_parsed_txs):,} transactions across {len(sample_folders)} blocks")
 print(f"    Unique Bitcoin addresses extracted: {len(address_stats):,}")
 
-# 3. Perform Fraud Risk Scoring on Raw Transactions
-print("\n[3] Scoring Raw Block Transactions for Fraud Risk ...")
+# 3. Transaction-Level Heuristic Risk Assessment
+print("\n[3] Scoring Raw Block Transactions via Heuristic Risk Engine ...")
+df_suspicious_txs = df_parsed_txs.sort_values(by="heuristic_score", ascending=False)
 
-# Construct proxy feature representation for raw block transactions
-# Fee-to-value ratio, size per input, value per output, etc.
-df_parsed_txs["fee_ratio"] = df_parsed_txs["fee_btc"] / (df_parsed_txs["value_btc"] + 1e-8)
-df_parsed_txs["val_per_out"] = df_parsed_txs["value_btc"] / (df_parsed_txs["outputs_count"] + 1e-8)
-df_parsed_txs["val_per_inp"] = df_parsed_txs["inputs_value"] / (1e8 * df_parsed_txs["inputs_count"] + 1e-8)
-df_parsed_txs["in_out_ratio"] = df_parsed_txs["inputs_count"] / (df_parsed_txs["outputs_count"] + 1e-8)
-
-# Calculate Fraud Anomaly Score
-df_parsed_txs["fraud_score"] = (
-    0.35 * np.clip(df_parsed_txs["fee_ratio"] * 10, 0, 1) +
-    0.35 * np.clip(df_parsed_txs["in_out_ratio"] / 5, 0, 1) +
-    0.30 * (df_parsed_txs["value_btc"] > 10.0).astype(float)
-)
-
-# Sort by highest fraud score
-df_suspicious_txs = df_parsed_txs.sort_values(by="fraud_score", ascending=False)
-
-print("\n    Top 5 Highest Fraud Risk Transactions Discovered in Raw Blocks:")
-top5_txs = df_suspicious_txs[["tx_hash", "block_height", "value_btc", "fee_btc", "inputs_count", "outputs_count", "fraud_score"]].head(5)
+print("\n    Top 5 Highest Heuristic Risk Transactions in Raw Blocks:")
+top5_txs = df_suspicious_txs[["tx_hash", "block_height", "value_btc", "fee_btc", "inputs_count", "outputs_count", "heuristic_score"]].head(5)
 print(top5_txs.to_string(index=False))
 
-# 4. Perform Address Multi-Class Category Scoring
-print("\n[4] Scoring Extracted Bitcoin Addresses against BABD-13 Feature Schema ...")
-addr_df = pd.DataFrame.from_dict(address_stats, orient="index")
-addr_df.index.name = "account"
-addr_df.reset_index(inplace=True)
+# 4. Address-Level Behavioral Classification (HONEST 5 Derived Features)
+print("\n[4] Extracting Honest Behavioral Features for Addresses & Classifying ...")
 
-# Generate mock/proxy features matching BABD-13 feature count for raw address scoring
-mock_features = np.random.randn(len(addr_df), len(babd_feature_cols)).astype(np.float32)
-addr_preds = babd_model.predict(mock_features)
+addr_records = []
+for addr, s in address_stats.items():
+    tot_rec = s["total_received"]
+    tx_cnt = max(s["tx_count"], 1)
+    avg_val = tot_rec / tx_cnt
+    dur_sec = max(s["last_seen"] - s["first_seen"], 0)
+    freq = tx_cnt / max(dur_sec, 1)
 
-BABD_LABEL_NAMES = {
-    0: "Blackmail", 1: "Cyber-security service", 2: "Darknet market",
-    3: "Centralized exchange", 5: "P2P financial service", 6: "Gambling",
-    10: "Mining pool", 11: "Tumbler", 12: "Individual wallet",
-    13: "other_illicit"
-}
+    addr_records.append({
+        "account": addr,
+        "total_received": tot_rec,
+        "tx_count": tx_cnt,
+        "avg_value_per_tx": avg_val,
+        "active_duration_sec": dur_sec,
+        "tx_frequency": freq
+    })
+
+addr_df = pd.DataFrame(addr_records)
+
+# Feature matrix corresponding strictly to the 5 trained features
+X_addr = addr_df[[
+    "total_received",
+    "tx_count",
+    "avg_value_per_tx",
+    "active_duration_sec",
+    "tx_frequency"
+]].values.astype(np.float32)
+
+# Predict on real computed features
+addr_preds = babd_model.predict(X_addr)
+addr_probs = babd_model.predict_proba(X_addr)
+confidences = np.max(addr_probs, axis=1)
 
 addr_df["predicted_class_idx"] = addr_preds
+addr_df["model_confidence"] = np.round(confidences, 4)
 addr_df["predicted_category"] = [
-    BABD_LABEL_NAMES.get(idx_to_label.get(idx, idx), f"Class {idx}")
+    label_names.get(idx_to_label.get(idx, idx), f"Class {idx}")
     for idx in addr_preds
 ]
+
+# Print before/after verification
+print("\n" + "-" * 80)
+print("  VERIFICATION OF HONEST ADDRESS FEATURE SCORING (NO RANDOM NOISE):")
+print("  NOTE: Previous version used random noise instead of real features — this has been fixed.")
+print("-" * 80)
+sample_10 = addr_df[[
+    "account", "total_received", "tx_count", "avg_value_per_tx",
+    "active_duration_sec", "predicted_category", "model_confidence"
+]].head(10)
+print(sample_10.to_string(index=False))
+print("-" * 80)
 
 print("\n    Discovered Address Categories Distribution (Raw Blocks Sample):")
 print(addr_df["predicted_category"].value_counts().to_string())
 
-# Save raw block predictions
-output_path = MODELS_DIR / "raw_block_predictions.csv"
-df_suspicious_txs.to_csv(output_path, index=False)
-print(f"\n    Saved Raw Block Fraud Predictions -> {output_path}")
+# 5. Save artifacts for API, search, and frontend
+output_tx_path = MODELS_DIR / "raw_block_predictions.csv"
+df_suspicious_txs.to_csv(output_tx_path, index=False)
+print(f"\n[5] Saved Raw Block Transactions -> {output_tx_path}")
+
+output_addr_path = MODELS_DIR / "raw_address_predictions.csv"
+addr_df.to_csv(output_addr_path, index=False)
+print(f"    Saved Raw Address Predictions    -> {output_addr_path}")
 
 print(f"\n{SEP}")
 print("  RAW BLOCK FRAUD INFERENCE ENGINE COMPLETE")
