@@ -1,0 +1,22 @@
+# Byte-compiled / Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment & Virtual Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Node.js & React Dependencies
+frontend/node_modules/
+frontend/dist/
+.npm
+
+# Operating System & IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
