@@ -3,12 +3,15 @@
 FastAPI Backend Application — Bitcoin Fraud Monitoring Engine
 ==============================================================================
 Provides REST API endpoints and Real-Time WebSocket stream for live block fraud alerts:
-  - GET  /api/kpis         : High-level system telemetry & risk metrics
-  - GET  /api/search       : Query transaction hash or Bitcoin address for risk scoring
-  - GET  /api/benchmarks   : Model evaluation metrics for Elliptic & BABD-13
-  - GET  /api/clusters     : Top 50 multi-address co-spend entity clusters
-  - GET  /api/clusters/{a} : Cluster lookup for a specific Bitcoin address
-  - WS   /ws/stream        : Real-time WebSocket stream for live block transactions
+  - GET  /api/kpis                   : High-level system telemetry & risk metrics
+  - GET  /api/search                 : Query transaction hash or Bitcoin address for risk scoring
+  - GET  /api/benchmarks             : Model evaluation metrics for Elliptic & BABD-13
+  - GET  /api/clusters               : Top 50 multi-address co-spend entity clusters
+  - GET  /api/clusters/{a}           : Cluster lookup for a specific Bitcoin address
+  - GET  /api/network-alerts         : Ranked list of multimodal correlated alerts
+  - GET  /api/network-alerts/clusters: Coordinated subnet & ASN cluster aggregations
+  - GET  /api/network-alerts/{txid}  : Forensic drilldown with multimodal XAI tree attribution
+  - WS   /ws/stream                  : Real-time WebSocket stream for live block transactions
 
 NOTE: heuristic_score is a rule-based proxy, not the trained ML model's output,
 because raw block transactions lack ground-truth labels needed to validate
@@ -32,6 +35,12 @@ from fastapi.staticfiles import StaticFiles
 from feature_utils import calculate_tx_heuristic_score
 from explainability import explain_tree_prediction, explain_heuristic_prediction
 
+try:
+    from backend.network_alerts import router as network_alerts_router
+except ImportError:
+    from network_alerts import router as network_alerts_router
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 PROCESSED_DIR = BASE_DIR / "processed"
@@ -50,21 +59,11 @@ if babd_model_path.exists():
     try:
         with open(babd_model_path, "rb") as f:
             babd_model_dict = pickle.load(f)
-            print("  ✓ Loaded BABD-13 reduced model for SHAP tree explanations.")
+            print("  [+] Loaded BABD-13 reduced model for SHAP tree explanations.")
     except Exception as e:
         print(f"  [!] Could not load BABD-13 model: {e}")
 
-combined_model_dict = None
-combined_model_path = MODELS_DIR / "combined_risk_model.pkl"
-if combined_model_path.exists():
-    try:
-        with open(combined_model_path, "rb") as f:
-            combined_model_dict = pickle.load(f)
-            print("  ✓ Loaded Combined Risk model for multimodal explanations.")
-    except Exception as e:
-        print(f"  [!] Could not load Combined Risk model: {e}")
-
-app = FastAPI(title="BitSentinel-AI Fraud Detection Platform API", version="1.3.0")
+app = FastAPI(title="BitSentinel-AI Fraud Detection Platform API", version="1.4.0")
 
 # Enable CORS for React frontend
 app.add_middleware(
@@ -74,6 +73,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Network Correlation Alerts Router
+app.include_router(network_alerts_router)
 
 # Serve plots directory statically for images
 if PLOTS_DIR.exists():

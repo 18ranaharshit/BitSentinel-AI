@@ -298,6 +298,40 @@ print(f"     - Network Correlation Alone : {full_exchange_net:>4,d} / {full_exch
 print(f"     - Multimodal Fusion Model   : {full_exchange_fused:>4,d} / {full_exchange_total:,} ({100*full_exchange_fused/full_exchange_total:.2f}% False Alarms - 100% Cleared)")
 print("=" * 80 + "\n")
 
+# ------------------------------------------------------------------------------
+# 9. Export Fused Alerts Dataset for API & Dashboard (Task 1)
+# ------------------------------------------------------------------------------
 print(f"\n{SEP}")
-print("  FIX 4 SCOPING COMPLETE: Populations unified and standardized.")
+print("  EXPORTING FUSED NETWORK-BLOCKCHAIN ALERTS DATASET FOR API & DASHBOARD")
+print(SEP)
+
+df_export = df_net.copy()
+df_export = df_export.rename(columns={
+    "is_injected_pattern": "synthetic_eval_label",
+    "is_legit_bursty_cluster": "synthetic_eval_is_legit_burst"
+})
+
+export_cols = [
+    "txid", "timestamp", "datetime_utc", "src_ip", "dst_ip", "src_port", "dst_port",
+    "src_subnet24", "src_country", "src_asn", "src_asn_name", "dst_country", "dst_asn", "dst_asn_name",
+    "src_ip_peer_count", "src_subnet24_peer_count", "src_asn_peer_count", "time_cluster_peer_count",
+    "is_correlated_cluster", "blockchain_risk_score", "fused_prob", "fused_pred",
+    "synthetic_eval_label", "synthetic_eval_is_legit_burst"
+]
+
+for col in export_cols:
+    if col not in df_export.columns:
+        df_export[col] = 0
+
+df_export = df_export[export_cols].sort_values(by="fused_prob", ascending=False)
+export_path = MODELS_DIR / "network_correlated_alerts.csv"
+df_export.to_csv(export_path, index=False)
+
+print(f"    Exported {len(df_export):,} Fused Alert Records -> {export_path}")
+print(f"    High-Risk Fused Alerts (fused_prob >= 0.50): {(df_export['fused_prob'] >= 0.5).sum():,}")
 print(f"{SEP}\n")
+
+print(f"\n{SEP}")
+print("  PIPELINE COMPLETE: Multimodal Cross-Layer Correlation Persisted.")
+print(f"{SEP}\n")
+

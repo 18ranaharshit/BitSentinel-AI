@@ -3,7 +3,8 @@
 Bitcoin Fraud Detection Pipeline — Verification & Integrity Audit Script
 ==============================================================================
 Verifies that all processed CSVs, trained model weights, evaluation plots,
-and inference prediction outputs are correctly generated and non-empty.
+wallet entity clusters, network correlations, and inference prediction outputs
+are correctly generated and non-empty.
 ==============================================================================
 """
 
@@ -51,6 +52,9 @@ check_file(PROCESSED_DIR / "babd13_val.csv")
 check_file(PROCESSED_DIR / "babd13_test.csv")
 check_file(PROCESSED_DIR / "artifact_label0_accounts.csv")
 check_file(PROCESSED_DIR / "multilabel_accounts.csv")
+check_file(PROCESSED_DIR / "network_metadata.csv")
+check_file(PROCESSED_DIR / "network_metadata_geo.csv")
+check_file(PROCESSED_DIR / "network_blockchain_correlated.csv")
 
 print("\n[2] Auditing Model Checkpoints & Pretrained Artifacts (models/) ...")
 check_file(MODELS_DIR / "elliptic_node_embeddings.pt")
@@ -60,7 +64,12 @@ check_file(MODELS_DIR / "elliptic_gcn_classifier.pt")
 check_file(MODELS_DIR / "elliptic_benchmark_results.csv")
 check_file(MODELS_DIR / "babd13_best_model.pkl")
 check_file(MODELS_DIR / "babd13_benchmark_results.csv")
+check_file(MODELS_DIR / "babd13_reduced_model.pkl")
+check_file(MODELS_DIR / "combined_risk_model.pkl")
+check_file(MODELS_DIR / "network_correlated_alerts.csv")
+check_file(MODELS_DIR / "wallet_clusters.csv")
 check_file(MODELS_DIR / "raw_block_predictions.csv")
+check_file(MODELS_DIR / "raw_address_predictions.csv")
 
 print("\n[3] Auditing Generated Benchmark Visualization Plots (plots/) ...")
 check_file(PLOTS_DIR / "elliptic_class_distribution.png")
@@ -75,7 +84,8 @@ if pred_path.exists():
     df_preds = pd.read_csv(pred_path)
     print(f"  Total Scored Live Transactions: {len(df_preds):,}")
     print("\n  Top 3 Highest Fraud Risk Live Transactions:")
-    cols = ["tx_hash", "block_height", "value_btc", "fee_btc", "fraud_score"]
+    score_col = "heuristic_score" if "heuristic_score" in df_preds.columns else "fraud_score"
+    cols = ["tx_hash", "block_height", "value_btc", "fee_btc", score_col]
     available_cols = [c for c in cols if c in df_preds.columns]
     print(df_preds[available_cols].head(3).to_string(index=False))
 
