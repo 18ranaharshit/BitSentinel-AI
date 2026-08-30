@@ -195,6 +195,7 @@ with torch.no_grad():
     neg_dots = (final_embeddings[neg_sample_src] * final_embeddings[neg_sample_dst]).sum(dim=-1)
     neg_probs = torch.sigmoid(neg_dots)
 
+
 print("\n  5 Random POSITIVE (Connected) Node Pairs:")
 for i in range(5):
     u = pos_sample_src[i].item()

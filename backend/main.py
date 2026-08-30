@@ -6,6 +6,8 @@ Provides REST API endpoints and Real-Time WebSocket stream for live block fraud 
   - GET  /api/kpis         : High-level system telemetry & risk metrics
   - GET  /api/search       : Query transaction hash or Bitcoin address for risk scoring
   - GET  /api/benchmarks   : Model evaluation metrics for Elliptic & BABD-13
+  - GET  /api/clusters     : Top 50 multi-address co-spend entity clusters
+  - GET  /api/clusters/{a} : Cluster lookup for a specific Bitcoin address
   - WS   /ws/stream        : Real-time WebSocket stream for live block transactions
 
 NOTE: heuristic_score is a rule-based proxy, not the trained ML model's output,
@@ -18,6 +20,7 @@ reduced BABD-13 model on derived honest behavioral features.
 import asyncio
 import json
 import re
+import pickle
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -27,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from feature_utils import calculate_tx_heuristic_score
+from explainability import explain_tree_prediction, explain_heuristic_prediction
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
@@ -39,7 +43,28 @@ print("  NOTE: heuristic_score is a rule-based proxy, not the trained ML model's
 print("  because raw block transactions lack ground-truth labels needed to validate")
 print("  a proxy model against Elliptic's feature space.")
 
-app = FastAPI(title="BitSentinel-AI Fraud Detection Platform API", version="1.1.0")
+# Load models for SHAP explainability
+babd_model_dict = None
+babd_model_path = MODELS_DIR / "babd13_reduced_model.pkl"
+if babd_model_path.exists():
+    try:
+        with open(babd_model_path, "rb") as f:
+            babd_model_dict = pickle.load(f)
+            print("  ✓ Loaded BABD-13 reduced model for SHAP tree explanations.")
+    except Exception as e:
+        print(f"  [!] Could not load BABD-13 model: {e}")
+
+combined_model_dict = None
+combined_model_path = MODELS_DIR / "combined_risk_model.pkl"
+if combined_model_path.exists():
+    try:
+        with open(combined_model_path, "rb") as f:
+            combined_model_dict = pickle.load(f)
+            print("  ✓ Loaded Combined Risk model for multimodal explanations.")
+    except Exception as e:
+        print(f"  [!] Could not load Combined Risk model: {e}")
+
+app = FastAPI(title="BitSentinel-AI Fraud Detection Platform API", version="1.3.0")
 
 # Enable CORS for React frontend
 app.add_middleware(
@@ -64,7 +89,7 @@ def root():
     return {
         "status": "online",
         "service": "BitSentinel-AI Backend",
-        "note": "Transaction risk scores are heuristic; Address classifications are ML-driven."
+        "note": "Transaction risk scores are heuristic; Address classifications are ML-driven with SHAP explainability."
     }
 
 
@@ -105,27 +130,54 @@ def get_kpis():
 def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin address")):
     """
     Searches transaction hash (64 hex) or Bitcoin address (1, 3, bc1) for risk intelligence.
-    Returns transaction heuristic risk score or address ML-predicted classification.
+    Returns transaction heuristic risk score or address ML-predicted classification with SHAP explanation.
     """
     query_str = q.strip()
     is_tx_hash = bool(re.fullmatch(r"^[0-9a-fA-F]{64}$", query_str))
-    is_btc_address = bool(re.fullmatch(r"^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$", query_str))
+    is_btc_address = bool(re.fullmatch(r"^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{20,62}$", query_str))
 
     # 1. Address Search Check
     raw_addr_path = MODELS_DIR / "raw_address_predictions.csv"
+    clusters_path = MODELS_DIR / "wallet_clusters.csv"
+
     if is_btc_address or (raw_addr_path.exists() and not is_tx_hash):
+        # A. Check ML Predictions first
         if raw_addr_path.exists():
             df_addr = pd.read_csv(raw_addr_path)
             match_addr = df_addr[df_addr["account"].str.lower() == query_str.lower()]
             if not match_addr.empty:
                 addr_row = match_addr.iloc[0]
+                
+                # Compute SHAP explainability for address classification
+                feat_names = ["total_received", "tx_count", "avg_value_per_tx", "active_duration_sec", "tx_frequency"]
+                feat_vals = [
+                    float(addr_row["total_received"]),
+                    int(addr_row["tx_count"]),
+                    float(addr_row["avg_value_per_tx"]),
+                    int(addr_row["active_duration_sec"]),
+                    float(addr_row["tx_frequency"])
+                ]
+
+                explanation_str = "Attributed to distinct on-chain transaction frequency and inflow volume profile."
+                top_factors = []
+                if babd_model_dict and "model" in babd_model_dict:
+                    m = babd_model_dict["model"]
+                    pred_cat = str(addr_row["predicted_category"])
+                    c_idx = list(m.classes_).index(pred_cat) if pred_cat in list(m.classes_) else 0
+                    exp_res = explain_tree_prediction(m, feat_vals, feat_names, top_n=3, target_class_idx=c_idx)
+                    explanation_str = exp_res.get("summary", explanation_str)
+                    top_factors = exp_res.get("top_factors", [])
+
                 return {
                     "found": True,
                     "query": query_str,
                     "type": "address",
+                    "risk_score_status": "scored",
                     "scoring_engine": "BABD-13 Reduced-Feature ML Classifier (Random Forest)",
                     "predicted_category": str(addr_row["predicted_category"]),
                     "model_confidence": float(addr_row.get("model_confidence", 0.0)),
+                    "explanation": explanation_str,
+                    "top_factors": top_factors,
                     "details": {
                         "account": str(addr_row["account"]),
                         "tx_count": int(addr_row["tx_count"]),
@@ -134,6 +186,23 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
                         "active_duration_sec": int(addr_row["active_duration_sec"]),
                         "tx_frequency": round(float(addr_row["tx_frequency"]), 6)
                     }
+                }
+
+        # B. Check Co-Spend Wallet Clusters (Partial Match: in cluster, but not scored individually)
+        if clusters_path.exists():
+            df_clusters = pd.read_csv(clusters_path)
+            match_cluster = df_clusters[df_clusters["address"].str.lower() == query_str.lower()]
+            if not match_cluster.empty:
+                c_row = match_cluster.iloc[0]
+                return {
+                    "found": True,
+                    "query": query_str,
+                    "type": "address",
+                    "risk_score_status": "not_scored",
+                    "message": "This address was found in a wallet cluster but has no individual risk score yet (outside the ML model's scored sample).",
+                    "explanation": f"Co-spend entity linkage: Address is co-spent with {int(c_row['cluster_size'])} sibling addresses under entity {c_row['cluster_id']}.",
+                    "cluster_id": str(c_row["cluster_id"]),
+                    "cluster_size": int(c_row["cluster_size"])
                 }
 
     # 2. Transaction Search Check
@@ -148,13 +217,19 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
             score = float(tx[score_col])
             is_high_risk = bool(score >= 0.70)
             
+            # Generate rule-based heuristic explanation
+            exp_res = explain_heuristic_prediction(tx.to_dict(), score)
+
             return {
                 "found": True,
                 "query": query_str,
                 "type": "transaction",
+                "risk_score_status": "scored",
                 "scoring_engine": "Rule-Based Heuristic Proxy (Fee/Volume/Degree ratios)",
                 "heuristic_score": score,
                 "is_high_risk": is_high_risk,
+                "explanation": exp_res.get("summary"),
+                "top_factors": exp_res.get("top_factors", []),
                 "details": {
                     "tx_hash": str(tx["tx_hash"]),
                     "block_height": int(tx["block_height"]),
@@ -175,6 +250,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
     return {
         "found": False,
         "query": query_str,
+        "risk_score_status": "not_found",
         "message": f"No exact match found for '{query_str}'. Please check the hash or address.",
         "sample_transactions": sample_txs
     }
@@ -208,12 +284,95 @@ def get_benchmarks():
 
 
 # ------------------------------------------------------------------------------
-# WEBSOCKET STREAMING ENDPOINT
+# WALLET CLUSTERING ENDPOINTS (FIX 5)
+# ------------------------------------------------------------------------------
+
+@app.get("/api/clusters")
+def get_wallet_clusters():
+    """Returns the top 50 largest multi-address co-spend entity clusters."""
+    clusters_path = MODELS_DIR / "wallet_clusters.csv"
+    if not clusters_path.exists():
+        return {
+            "status": "not_generated_yet",
+            "message": "Wallet clusters not generated yet. Please run 'python bitcoin_heuristics.py' first.",
+            "total_clusters": 0,
+            "clusters": []
+        }
+
+    df_clusters = pd.read_csv(clusters_path)
+    if df_clusters.empty:
+        return {
+            "status": "empty",
+            "message": "No multi-address clusters found in dataset.",
+            "total_clusters": 0,
+            "clusters": []
+        }
+
+    # Group by cluster_id and collect address lists
+    grouped = df_clusters.groupby("cluster_id")
+    cluster_list = []
+    for c_id, grp in grouped:
+        cluster_list.append({
+            "cluster_id": str(c_id),
+            "size": int(len(grp)),
+            "addresses": grp["address"].tolist()
+        })
+
+    # Sort descending by size
+    cluster_list.sort(key=lambda x: x["size"], reverse=True)
+    top_50 = cluster_list[:50]
+
+    return {
+        "status": "ready",
+        "total_clusters": len(cluster_list),
+        "displayed_count": len(top_50),
+        "clusters": top_50
+    }
+
+
+@app.get("/api/clusters/{address}")
+def lookup_address_cluster(address: str):
+    """Looks up which co-spend entity cluster a specific Bitcoin address belongs to."""
+    clusters_path = MODELS_DIR / "wallet_clusters.csv"
+    if not clusters_path.exists():
+        return {
+            "found": False,
+            "status": "not_generated_yet",
+            "message": "Wallet clusters not generated yet. Please run 'python bitcoin_heuristics.py' first."
+        }
+
+    df_clusters = pd.read_csv(clusters_path)
+    target_addr = address.strip()
+    match = df_clusters[df_clusters["address"].str.lower() == target_addr.lower()]
+
+    if match.empty:
+        return {
+            "found": False,
+            "address": target_addr,
+            "message": f"Address '{target_addr}' is not part of any multi-address co-spend cluster."
+        }
+
+    matched_row = match.iloc[0]
+    c_id = str(matched_row["cluster_id"])
+    all_cluster_addrs = df_clusters[df_clusters["cluster_id"] == c_id]["address"].tolist()
+
+    return {
+        "found": True,
+        "address": target_addr,
+        "cluster_id": c_id,
+        "size": len(all_cluster_addrs),
+        "addresses": all_cluster_addrs,
+        "message": f"Address belongs to Co-Spend Wallet Cluster {c_id} ({len(all_cluster_addrs)} co-spent addresses)."
+    }
+
+
+# ------------------------------------------------------------------------------
+# WEBSOCKET STREAMING ENDPOINT (WITH EXPLAINABILITY)
 # ------------------------------------------------------------------------------
 
 @app.websocket("/ws/stream")
 async def websocket_stream(websocket: WebSocket):
-    """Streams live block transactions with heuristic risk scores via WebSocket."""
+    """Streams live block transactions with heuristic risk scores & explainability via WebSocket."""
     await websocket.accept()
     print("WebSocket Client Connected to Live Stream")
     
@@ -229,6 +388,10 @@ async def websocket_stream(websocket: WebSocket):
 
                     for tx in tx_list:
                         score = calculate_tx_heuristic_score(tx)
+                        is_alert = bool(score >= 0.70)
+                        
+                        exp_res = explain_heuristic_prediction(tx, score)
+                        
                         payload = {
                             "tx_hash": str(tx.get("hash", "")),
                             "block_height": int(tx.get("block_height", 0)),
@@ -238,7 +401,8 @@ async def websocket_stream(websocket: WebSocket):
                             "inputs_count": int(tx.get("inputs_count", 0)),
                             "outputs_count": int(tx.get("outputs_count", 0)),
                             "heuristic_score": score,
-                            "is_alert": bool(score >= 0.70)
+                            "is_alert": is_alert,
+                            "explanation": exp_res.get("summary")
                         }
 
                         await websocket.send_text(json.dumps(payload))
