@@ -64,46 +64,46 @@ pip install pandas numpy scikit-learn torch torch-geometric xgboost lightgbm mat
 
 ```bash
 # 1. Dataset Exploration
-python explore_datasets.py
+python src/explore_datasets.py
 
 # 2. BABD-13 Data Cleaning & Account-Disjoint Splitting
-python fix_babd13_split.py
+python src/fix_babd13_split.py
 
 # 3. Verify Elliptic Temporal Splits & Graph Edges
-python verify_elliptic_prep.py
+python src/verify_elliptic_prep.py
 
 # 4. Self-Supervised GraphSAGE Pretraining (100 Epochs)
-python train_elliptic_graphsage.py
+python src/train_elliptic_graphsage.py
 
 # 5. Downstream Elliptic Fraud Classification
-python train_elliptic_classifier.py
+python src/train_elliptic_classifier.py
 
 # 6. Downstream BABD-13 Multi-Class Address Classification
-python train_babd13_classifier.py
+python src/train_babd13_classifier.py
 
 # 7. Generate Synthetic Network Telemetry Metadata
-python generate_network_metadata.py
+python src/generate_network_metadata.py
 
 # 8. Genuine GeoIP & BGP ASN Resolution
-python add_geoip_resolution.py
+python src/add_geoip_resolution.py
 
 # 9. Cross-Layer Correlation & Rolling Subnet Temporal Density
-python correlate_network_blockchain.py
+python src/correlate_network_blockchain.py
 
 # 10. Train Multimodal Cross-Layer Risk Fusion Model & Export Alerts
-python train_combined_risk_model.py
+python src/train_combined_risk_model.py
 
 # 11. Co-Spend Address Entity Clustering (Union-Find)
-python bitcoin_heuristics.py
+python src/bitcoin_heuristics.py
 
 # 12. Real-Time Raw Block JSON Feature Extraction & Scoring
-python parse_raw_blocks_and_predict.py
+python src/parse_raw_blocks_and_predict.py
 
 # 13. Generate Benchmark Visualization Charts
-python generate_benchmark_report.py
+python src/generate_benchmark_report.py
 
 # 14. Pipeline Integrity Verification Audit
-python verify_pipeline_integrity.py
+python src/verify_pipeline_integrity.py
 ```
 
 ---
@@ -130,12 +130,37 @@ npm run dev
 ## 📁 Repository Structure
 
 ```
-├── docs/
-│   └── TECHNICAL_WRITEUP.md        # Comprehensive technical report & PS deliverable
-├── backend/
+├── README.md                      # Primary project overview & execution guide
+├── requirements.txt               # Full Python dependency specifications
+├── .gitignore                     # Git ignore rules
+│
+├── src/                           # All ML pipelines, training, heuristics & explainability
+│   ├── __init__.py
+│   ├── feature_utils.py           # On-chain heuristic rules and scoring proxy
+│   ├── explainability.py          # SHAP attribution & decision tree decomposition
+│   ├── bitcoin_heuristics.py      # Union-Find multi-input clustering heuristics
+│   ├── parse_raw_blocks_and_predict.py # Raw Bitcoin block streaming & inference engine
+│   ├── live_stream_simulator.py   # Live block stream simulator
+│   ├── train_babd13_reduced_model.py   # BABD-13 5-feature honest classifier
+│   ├── train_babd13_classifier.py      # BABD-13 full 150-feature baseline benchmark
+│   ├── train_elliptic_graphsage.py     # Self-supervised GraphSAGE GNN
+│   ├── train_elliptic_classifier.py    # Downstream Elliptic fraud classifiers
+│   ├── train_combined_risk_model.py    # Multimodal BGP network + on-chain fusion
+│   ├── correlate_network_blockchain.py # Cross-layer correlation & clustering
+│   ├── add_geoip_resolution.py        # BGP ASN & GeoIP telemetry enrichment
+│   ├── generate_network_metadata.py    # Network burst metadata generation
+│   ├── fix_babd13_split.py             # BABD-13 account-disjoint stratified splitting
+│   ├── generate_benchmark_report.py    # Evaluation benchmark aggregation
+│   ├── explore_datasets.py             # Data exploration & distribution checks
+│   ├── test_explainability.py          # Explainability diagnostic test suite
+│   ├── verify_elliptic_prep.py         # Elliptic disjointness & edge diagnostics
+│   └── verify_pipeline_integrity.py    # Integrity verification & checkpoint audit
+│
+├── backend/                       # FastAPI application & REST/WebSocket routes
 │   ├── main.py                     # FastAPI REST & WebSocket Application
 │   └── network_alerts.py           # Network correlation REST API router
-├── frontend/
+│
+├── frontend/                      # React / Vite web dashboard
 │   ├── package.json
 │   ├── vite.config.js
 │   ├── index.html
@@ -143,20 +168,10 @@ npm run dev
 │       ├── index.css               # Dark glassmorphism stylesheet
 │       ├── main.jsx                # Entrypoint
 │       └── App.jsx                 # React dashboard UI component
-├── generate_network_metadata.py    # Synthetic network telemetry generator with randomized sizing
-├── add_geoip_resolution.py         # Pure-Python BGP routing table resolver (ip2asn-v4.tsv.gz)
-├── correlate_network_blockchain.py # Cross-layer correlation & rolling temporal burst engine
-├── train_combined_risk_model.py    # Multimodal fusion classifier & alert persistence
-├── explainability.py               # SHAP tree attribution and heuristic rule explainability engine
-├── bitcoin_heuristics.py           # Address co-spend clustering heuristics engine
-├── live_stream_simulator.py        # Real-time block stream & fraud alert simulator
-├── explore_datasets.py             # EDA & dataset statistics
-├── fix_babd13_split.py             # BABD-13 artifact cleaning & account split
-├── verify_elliptic_prep.py         # Elliptic disjointness & edge diagnostics
-├── train_elliptic_graphsage.py     # Self-supervised GraphSAGE pretraining
-├── train_elliptic_classifier.py    # Elliptic downstream benchmarking
-├── train_babd13_classifier.py      # BABD-13 multi-class classifier
-├── parse_raw_blocks_and_predict.py # Raw block JSON parser & live inference
-├── generate_benchmark_report.py    # Generates PNG benchmark evaluation charts
-└── verify_pipeline_integrity.py    # Integrity verification & checkpoint audit script
+│
+├── models/                        # Serialized ML artifacts & cached inference tables
+├── processed/                     # Preprocessed data, feature splits & correlated tables
+├── raw data/                      # Raw block files, Elliptic datasets, ip2asn-v4.tsv.gz
+├── plots/                         # Generated evaluation plots and confusion matrices
+└── docs/                          # Architecture & technical writeup documentation
 ```

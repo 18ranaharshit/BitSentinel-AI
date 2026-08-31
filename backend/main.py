@@ -24,7 +24,15 @@ import asyncio
 import json
 import re
 import pickle
+import sys
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR / "src") not in sys.path:
+    sys.path.insert(0, str(BASE_DIR / "src"))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 import numpy as np
 import pandas as pd
 
@@ -40,8 +48,6 @@ try:
 except ImportError:
     from network_alerts import router as network_alerts_router
 
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 PROCESSED_DIR = BASE_DIR / "processed"
 PLOTS_DIR = BASE_DIR / "plots"

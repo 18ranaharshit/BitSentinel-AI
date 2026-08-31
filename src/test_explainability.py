@@ -16,7 +16,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from explainability import explain_tree_prediction, explain_heuristic_prediction
+try:
+    from explainability import explain_tree_prediction, explain_heuristic_prediction
+except ImportError:
+    from src.explainability import explain_tree_prediction, explain_heuristic_prediction
 
 PROCESSED_DIR = Path("processed")
 MODELS_DIR = Path("models")

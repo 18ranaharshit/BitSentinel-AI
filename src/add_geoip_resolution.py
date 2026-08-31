@@ -25,8 +25,8 @@ import pandas as pd
 
 PROCESSED_DIR = Path("processed")
 INPUT_CSV = PROCESSED_DIR / "network_metadata.csv"
-OUTPUT_CSV = PROCESSED_DIR / "network_metadata_geo.csv"
-ASN_TSV_GZ = Path("ip2asn-v4.tsv.gz")
+RAW_DIR = Path("raw data")
+ASN_TSV_GZ = RAW_DIR / "ip2asn-v4.tsv.gz" if (RAW_DIR / "ip2asn-v4.tsv.gz").exists() else Path("ip2asn-v4.tsv.gz")
 
 SEP = "=" * 80
 

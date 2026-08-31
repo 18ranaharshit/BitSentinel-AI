@@ -22,7 +22,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from feature_utils import calculate_tx_heuristic_score
+try:
+    from feature_utils import calculate_tx_heuristic_score
+except ImportError:
+    from src.feature_utils import calculate_tx_heuristic_score
 
 RAW_BLOCKS_DIR = Path("raw data/600000-605999")
 MODELS_DIR = Path("models")

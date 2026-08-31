@@ -17,7 +17,10 @@ import time
 from pathlib import Path
 import pandas as pd
 
-from feature_utils import calculate_tx_heuristic_score
+try:
+    from feature_utils import calculate_tx_heuristic_score
+except ImportError:
+    from src.feature_utils import calculate_tx_heuristic_score
 
 RAW_BLOCKS_DIR = Path("raw data/600000-605999")
 

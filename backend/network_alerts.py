@@ -9,15 +9,22 @@ Provides REST API endpoints for fused cross-layer risk intelligence:
 ==============================================================================
 """
 
+import sys
 import pickle
 from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR / "src") not in sys.path:
+    sys.path.insert(0, str(BASE_DIR / "src"))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Query
 
 from explainability import explain_tree_prediction
 
-BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 
 router = APIRouter(prefix="/api", tags=["network-correlation"])
