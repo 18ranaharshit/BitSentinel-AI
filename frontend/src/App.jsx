@@ -23,8 +23,26 @@ import {
   ChevronUp,
   Share2,
   Database,
-  Sliders
+  Sliders,
+  TrendingUp,
+  PieChart as PieIcon
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ReferenceLine
+} from 'recharts';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005';
 const WS_URL = import.meta.env.VITE_WS_URL || (
@@ -32,6 +50,133 @@ const WS_URL = import.meta.env.VITE_WS_URL || (
     ? API_BASE.replace('https://', 'wss://') + '/ws/stream'
     : API_BASE.replace('http://', 'ws://') + '/ws/stream'
 );
+
+const DEFAULT_CHART_COLORS = {
+  gold: '#f7931a',
+  cyan: '#00d2ff',
+  purple: '#c084fc',
+  indigo: '#818cf8',
+  critical: '#ff4d4d',
+  high: '#fb923c',
+  medium: '#facc15',
+  low: '#00e676',
+  textSecondary: '#8b98a5',
+  borderColor: 'rgba(255, 255, 255, 0.08)',
+  bgCard: 'rgba(22, 27, 38, 0.75)',
+};
+
+// Dark Glassmorphic Custom Tooltip Component
+const DarkChartTooltip = ({ active, payload, label, valuePrefix = '', valueSuffix = '', formatter }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{
+        background: 'rgba(14, 18, 26, 0.95)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '8px',
+        padding: '10px 14px',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(8px)',
+        fontSize: '0.82rem',
+        color: '#f0f4f8'
+      }}>
+        {label && <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#ffffff' }}>{label}</div>}
+        {payload.map((entry, index) => (
+          <div key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: entry.color || entry.fill }}></span>
+            <span style={{ color: '#8b98a5' }}>{entry.name}:</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+              {formatter ? formatter(entry.value, entry.name, entry) : `${valuePrefix}${entry.value}${valueSuffix}`}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// Shared Factor Bar Chart Component for Task 6
+function FactorBarChart({ factors, chartColors }) {
+  if (!factors || !Array.isArray(factors) || factors.length === 0) return null;
+
+  const data = factors.map((f, idx) => {
+    const label = f.label || f.feature || f.factor || `Factor #${idx + 1}`;
+    const contrib = typeof f.contribution === 'number' ? f.contribution : 0;
+    const isRisk = f.direction === 'risk' || contrib > 0;
+    return {
+      label,
+      contribution: contrib,
+      rawVal: f.value,
+      isRisk,
+      fill: isRisk ? chartColors.critical : chartColors.low
+    };
+  });
+
+  return (
+    <div style={{ marginTop: '16px', marginBottom: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px 16px' }}>
+      <div style={{ fontSize: '0.78rem', color: chartColors.textSecondary, fontWeight: 700, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        📊 Decision Factor Attribution Delta (SHAP / Heuristic Impact)
+      </div>
+      <div style={{ width: '100%', height: Math.max(160, data.length * 38) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            layout="vertical"
+            data={data}
+            margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" horizontal={false} />
+            <XAxis
+              type="number"
+              tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+              axisLine={{ stroke: chartColors.borderColor }}
+              tickLine={{ stroke: chartColors.borderColor }}
+            />
+            <YAxis
+              type="category"
+              dataKey="label"
+              width={160}
+              tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
+              axisLine={{ stroke: chartColors.borderColor }}
+              tickLine={false}
+            />
+            <ReferenceLine x={0} stroke={chartColors.textSecondary} strokeWidth={1} />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const d = payload[0].payload;
+                  return (
+                    <div style={{
+                      background: 'rgba(14, 18, 26, 0.95)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '0.8rem',
+                      color: '#f0f4f8'
+                    }}>
+                      <div style={{ fontWeight: 'bold', color: '#ffffff' }}>{d.label}</div>
+                      {d.rawVal !== undefined && (
+                        <div style={{ color: '#8b98a5', marginTop: '2px' }}>Feature Value: <span style={{ color: '#f0f4f8', fontFamily: 'var(--font-mono)' }}>{String(d.rawVal)}</span></div>
+                      )}
+                      <div style={{ color: d.isRisk ? chartColors.critical : chartColors.low, marginTop: '4px', fontWeight: 700 }}>
+                        Attribution: {d.contribution > 0 ? '+' : ''}{Number(d.contribution).toFixed(4)} ({d.isRisk ? 'Pushed toward Risk' : 'Protective / Safe Signal'})
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Bar dataKey="contribution" radius={[4, 4, 4, 4]}>
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -45,11 +190,34 @@ export default function App() {
   const [walletClusters, setWalletClusters] = useState(null);
   const [expandedClusterId, setExpandedClusterId] = useState(null);
 
-  // Network Correlation Alerts & Clusters State (Task 4)
+  // Network Correlation Alerts & Clusters State
   const [networkAlerts, setNetworkAlerts] = useState(null);
   const [networkClusters, setNetworkClusters] = useState(null);
   const [expandedNetworkTxid, setExpandedNetworkTxid] = useState(null);
   const [networkTxDetail, setNetworkTxDetail] = useState({});
+
+  // Memoized Chart Colors read dynamically from CSS Variables
+  const [chartColors, setChartColors] = useState(DEFAULT_CHART_COLORS);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const style = getComputedStyle(document.documentElement);
+      const getVal = (varName, fallback) => style.getPropertyValue(varName).trim() || fallback;
+      setChartColors({
+        gold: getVal('--accent-gold', DEFAULT_CHART_COLORS.gold),
+        cyan: getVal('--accent-cyan', DEFAULT_CHART_COLORS.cyan),
+        purple: getVal('--accent-purple', DEFAULT_CHART_COLORS.purple),
+        indigo: getVal('--accent-indigo', DEFAULT_CHART_COLORS.indigo),
+        critical: getVal('--alert-critical', DEFAULT_CHART_COLORS.critical),
+        high: getVal('--alert-high', DEFAULT_CHART_COLORS.high),
+        medium: getVal('--alert-medium', DEFAULT_CHART_COLORS.medium),
+        low: getVal('--alert-low', DEFAULT_CHART_COLORS.low),
+        textSecondary: getVal('--text-secondary', DEFAULT_CHART_COLORS.textSecondary),
+        borderColor: getVal('--border-color', DEFAULT_CHART_COLORS.borderColor),
+        bgCard: getVal('--bg-card', DEFAULT_CHART_COLORS.bgCard),
+      });
+    }
+  }, []);
 
   // Load REST KPIs, Benchmarks, Wallet Clusters, and Network Alerts
   useEffect(() => {
@@ -217,7 +385,7 @@ export default function App() {
               <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>No Raw Block Predictions Generated Yet</h3>
             </div>
             <p style={{ color: 'var(--text-secondary)', marginTop: '6px', margin: 0 }}>
-              Run <code>python parse_raw_blocks_and_predict.py</code> to extract honest features and populate real KPIs.
+              Run <code>python src/parse_raw_blocks_and_predict.py</code> to extract honest features and populate real KPIs.
             </p>
           </div>
         ) : (
@@ -303,6 +471,79 @@ export default function App() {
                 </p>
               </div>
             </div>
+
+            {/* Task 3: Risk Composition Donut & Volume Comparison Charts */}
+            {kpis && kpis.status !== 'no_predictions_yet' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '24px' }}>
+                {/* Donut Chart: Risk Composition */}
+                <div className="feature-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <PieIcon size={18} color="var(--accent-gold)" />
+                    <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                      Transaction Risk Composition
+                    </h3>
+                  </div>
+                  <div style={{ width: '100%', height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Normal Transactions', value: Math.max(0, (kpis.total_scored_transactions || 0) - (kpis.high_risk_alerts || 0)), color: chartColors.low },
+                            { name: 'High-Risk Alerts', value: kpis.high_risk_alerts || 0, color: chartColors.critical }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={80}
+                          paddingAngle={4}
+                          dataKey="value"
+                          label={({ name, percent }) => `${(percent * 100).toFixed(1)}%`}
+                          labelLine={false}
+                        >
+                          <Cell fill={chartColors.low} />
+                          <Cell fill={chartColors.critical} />
+                        </Pie>
+                        <Tooltip content={<DarkChartTooltip />} />
+                        <Legend
+                          verticalAlign="bottom"
+                          formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Bar Chart: Monitored vs Flagged Volume */}
+                <div className="feature-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <TrendingUp size={18} color="var(--accent-cyan)" />
+                    <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                      Monitored vs Flagged BTC Volume
+                    </h3>
+                  </div>
+                  <div style={{ width: '100%', height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          { name: 'Total Monitored', volume: kpis.total_monitored_btc_volume || 0, fill: chartColors.cyan },
+                          { name: 'Flagged High-Risk', volume: kpis.flagged_high_risk_btc_volume || 0, fill: chartColors.gold }
+                        ]}
+                        margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fill: chartColors.textSecondary, fontSize: 11 }} axisLine={{ stroke: chartColors.borderColor }} />
+                        <YAxis tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} tickFormatter={(v) => `${v} BTC`} />
+                        <Tooltip content={<DarkChartTooltip valueSuffix=" BTC" />} />
+                        <Bar dataKey="volume" radius={[6, 6, 0, 0]}>
+                          <Cell fill={chartColors.cyan} />
+                          <Cell fill={chartColors.gold} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -323,6 +564,89 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-panel-nested)', borderLeft: '3px solid var(--accent-cyan)', padding: '10px 14px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 <Info size={16} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
                 <span>{streamData[0].stream_note}</span>
+              </div>
+            )}
+
+            {/* Task 4: Rolling Risk Line Chart for Last 30 Transactions */}
+            {streamData.length > 0 && (
+              <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <TrendingUp size={16} color="var(--accent-cyan)" />
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-heading)', fontWeight: 700 }}>
+                      Live Heuristic Risk Trajectory (Last {Math.min(30, streamData.length)} Transactions)
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Red Dots indicate High-Risk Threshold Exceeded (≥ 0.70)
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={streamData.slice(0, 30).reverse().map((tx, idx) => ({
+                        idx: `#${idx + 1}`,
+                        txHash: tx.tx_hash ? tx.tx_hash.slice(0, 8) + '...' : `tx-${idx}`,
+                        score: parseFloat(tx.heuristic_score ?? tx.fraud_score ?? 0),
+                        isAlert: Boolean(tx.is_alert || (tx.heuristic_score ?? tx.fraud_score) >= 0.70),
+                        valueBtc: tx.value_btc
+                      }))}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
+                      <XAxis dataKey="idx" tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} />
+                      <YAxis domain={[0, 1.0]} tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} />
+                      <ReferenceLine y={0.70} stroke={chartColors.high} strokeDasharray="3 3" label={{ value: 'Alert Threshold (0.70)', fill: chartColors.high, fontSize: 11, position: 'insideTopRight' }} />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            return (
+                              <div style={{
+                                background: 'rgba(14, 18, 26, 0.95)',
+                                border: `1px solid ${d.isAlert ? chartColors.critical : 'rgba(255, 255, 255, 0.12)'}`,
+                                borderRadius: '8px',
+                                padding: '8px 12px',
+                                fontSize: '0.8rem',
+                                color: '#f0f4f8'
+                              }}>
+                                <div style={{ fontWeight: 'bold', color: '#ffffff' }}>Tx {d.txHash} ({d.idx})</div>
+                                <div style={{ color: '#8b98a5', marginTop: '2px' }}>Value: <span style={{ color: '#f0f4f8' }}>{d.valueBtc} BTC</span></div>
+                                <div style={{ color: d.isAlert ? chartColors.critical : chartColors.low, marginTop: '2px', fontWeight: 700 }}>
+                                  Score: {d.score.toFixed(4)} ({d.isAlert ? 'HIGH RISK ALERT' : 'NORMAL'})
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="score"
+                        name="Heuristic Risk Score"
+                        stroke={chartColors.cyan}
+                        strokeWidth={2}
+                        dot={(dotProps) => {
+                          const { cx, cy, payload, key } = dotProps;
+                          const isHigh = (payload.score ?? 0) >= 0.70;
+                          return (
+                            <circle
+                              key={key}
+                              cx={cx}
+                              cy={cy}
+                              r={isHigh ? 5 : 3}
+                              fill={isHigh ? chartColors.critical : chartColors.cyan}
+                              stroke={isHigh ? '#ffffff' : 'none'}
+                              strokeWidth={isHigh ? 1.5 : 0}
+                            />
+                          );
+                        }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
 
@@ -475,6 +799,9 @@ export default function App() {
                           </div>
                         )}
 
+                        {/* Task 6: Factor Bar Chart for Address Search */}
+                        <FactorBarChart factors={searchResult.top_factors} chartColors={chartColors} />
+
                         <pre className="code-box">
                           {JSON.stringify(searchResult.details, null, 2)}
                         </pre>
@@ -534,6 +861,9 @@ export default function App() {
                         </div>
                       )}
 
+                      {/* Task 6: Factor Bar Chart for Transaction Search */}
+                      <FactorBarChart factors={searchResult.top_factors} chartColors={chartColors} />
+
                       <pre className="code-box">
                         {JSON.stringify(searchResult.details, null, 2)}
                       </pre>
@@ -551,7 +881,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 4: Network Correlation Alerts (Task 4) */}
+        {/* Tab 4: Network Correlation Alerts */}
         {activeTab === 'network' && (
           <div>
             {/* Section 1: Cross-Layer Cluster Summary */}
@@ -573,7 +903,7 @@ export default function App() {
                     <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Network Correlation Not Generated Yet</h3>
                   </div>
                   <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
-                    Please run <code>python train_combined_risk_model.py</code> to generate <code>models/network_correlated_alerts.csv</code>.
+                    Please run <code>python src/train_combined_risk_model.py</code> to generate <code>models/network_correlated_alerts.csv</code>.
                   </p>
                 </div>
               ) : networkClusters && networkClusters.clusters ? (
@@ -586,6 +916,104 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Task 5: Horizontal Bar Chart of Top 10 Subnets by Max Fused Risk */}
+                  {networkClusters.clusters.length > 0 && (
+                    <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <TrendingUp size={16} color="var(--accent-cyan)" />
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-heading)', fontWeight: 700 }}>
+                            Top 10 Coordinated Subnets by Peak Fused Risk
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Color Coded by Risk Tier (Critical ≥85%, High ≥70%, Med ≥50%, Low &lt;50%)
+                        </span>
+                      </div>
+                      <div style={{ width: '100%', height: 260 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            layout="vertical"
+                            data={[...networkClusters.clusters]
+                              .sort((a, b) => (b.max_fused_prob || 0) - (a.max_fused_prob || 0))
+                              .slice(0, 10)
+                              .map(cl => {
+                                const prob = cl.max_fused_prob || 0;
+                                let fill = chartColors.low;
+                                if (prob >= 0.85) fill = chartColors.critical;
+                                else if (prob >= 0.70) fill = chartColors.high;
+                                else if (prob >= 0.50) fill = chartColors.medium;
+                                return {
+                                  subnet: cl.subnet,
+                                  country: cl.country,
+                                  asn: cl.asn,
+                                  max_fused_prob: prob,
+                                  avg_fused_prob: cl.avg_fused_prob || 0,
+                                  tx_count: cl.tx_count,
+                                  fill
+                                };
+                              })}
+                            margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" horizontal={false} />
+                            <XAxis
+                              type="number"
+                              domain={[0, 1.0]}
+                              tickFormatter={(v) => `${Math.round(v * 100)}%`}
+                              tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                              axisLine={{ stroke: chartColors.borderColor }}
+                            />
+                            <YAxis
+                              type="category"
+                              dataKey="subnet"
+                              width={110}
+                              tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                              axisLine={{ stroke: chartColors.borderColor }}
+                            />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const d = payload[0].payload;
+                                  return (
+                                    <div style={{
+                                      background: 'rgba(14, 18, 26, 0.95)',
+                                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                                      borderRadius: '8px',
+                                      padding: '8px 12px',
+                                      fontSize: '0.8rem',
+                                      color: '#f0f4f8'
+                                    }}>
+                                      <div style={{ fontWeight: 'bold', color: '#ffffff' }}>{d.subnet} ({d.country})</div>
+                                      <div style={{ color: '#8b98a5', marginTop: '2px' }}>BGP ASN: <span style={{ color: '#f0f4f8' }}>{d.asn}</span></div>
+                                      <div style={{ color: '#8b98a5' }}>Tx Count: <span style={{ color: '#f0f4f8' }}>{d.tx_count}</span></div>
+                                      <div style={{ color: d.fill, marginTop: '2px', fontWeight: 700 }}>
+                                        Peak Fused Risk: {(d.max_fused_prob * 100).toFixed(1)}% (Avg: {(d.avg_fused_prob * 100).toFixed(1)}%)
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="max_fused_prob" name="Peak Fused Risk" radius={[0, 4, 4, 0]}>
+                              {[...networkClusters.clusters]
+                                .sort((a, b) => (b.max_fused_prob || 0) - (a.max_fused_prob || 0))
+                                .slice(0, 10)
+                                .map((entry, index) => {
+                                  const prob = entry.max_fused_prob || 0;
+                                  let fill = chartColors.low;
+                                  if (prob >= 0.85) fill = chartColors.critical;
+                                  else if (prob >= 0.70) fill = chartColors.high;
+                                  else if (prob >= 0.50) fill = chartColors.medium;
+                                  return <Cell key={`cell-${index}`} fill={fill} />;
+                                })}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
 
                   <table className="stream-table">
                     <thead>
@@ -650,7 +1078,7 @@ export default function App() {
                     <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Fused Alerts Not Generated Yet</h3>
                   </div>
                   <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
-                    Please run <code>python train_combined_risk_model.py</code> to execute multimodal fusion and generate alerts.
+                    Please run <code>python src/train_combined_risk_model.py</code> to execute multimodal fusion and generate alerts.
                   </p>
                 </div>
               ) : networkAlerts && networkAlerts.alerts ? (
@@ -831,7 +1259,7 @@ export default function App() {
                   <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Wallet Clusters Not Generated Yet</h3>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
-                  Please run <code>python bitcoin_heuristics.py</code> to execute Union-Find co-spend analysis and generate <code>models/wallet_clusters.csv</code>.
+                  Please run <code>python src/bitcoin_heuristics.py</code> to execute Union-Find co-spend analysis and generate <code>models/wallet_clusters.csv</code>.
                 </p>
               </div>
             ) : walletClusters && walletClusters.clusters ? (
@@ -922,13 +1350,60 @@ export default function App() {
             </div>
             {benchmarks ? (
               <div>
+                {/* Task 2A: Grouped BarChart for Elliptic Benchmarks */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                   <Database size={18} color="var(--accent-gold)" />
                   <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
-                    Elliptic Benchmark Results
+                    Elliptic Benchmark Evaluation
                   </h3>
                 </div>
-                <table className="stream-table" style={{ marginBottom: '24px' }}>
+
+                {benchmarks.elliptic_benchmarks && benchmarks.elliptic_benchmarks.length > 0 && (
+                  <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
+                    <div style={{ width: '100%', height: 300 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={benchmarks.elliptic_benchmarks.map(row => ({
+                            name: `${row.Model} (${row.Split})`,
+                            Precision: row.Precision !== null && row.Precision !== undefined ? Number(row.Precision.toFixed(4)) : 0,
+                            Recall: row.Recall !== null && row.Recall !== undefined ? Number(row.Recall.toFixed(4)) : 0,
+                            'F1-Score': row['F1-Score'] !== null && row['F1-Score'] !== undefined ? Number(row['F1-Score'].toFixed(4)) : 0,
+                            'ROC-AUC': row['ROC-AUC'] !== null && row['ROC-AUC'] !== undefined ? Number(row['ROC-AUC'].toFixed(4)) : 0,
+                          }))}
+                          margin={{ top: 10, right: 30, left: 0, bottom: 25 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
+                            axisLine={{ stroke: chartColors.borderColor }}
+                            interval={0}
+                            angle={-10}
+                            textAnchor="end"
+                          />
+                          <YAxis
+                            domain={[0, 1.0]}
+                            tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                            axisLine={{ stroke: chartColors.borderColor }}
+                          />
+                          <Tooltip content={<DarkChartTooltip />} />
+                          <Legend
+                            verticalAlign="top"
+                            align="right"
+                            wrapperStyle={{ paddingBottom: '10px' }}
+                            formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
+                          />
+                          <Bar dataKey="Precision" fill={chartColors.cyan} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Recall" fill={chartColors.purple} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="F1-Score" fill={chartColors.gold} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="ROC-AUC" fill={chartColors.indigo} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                <table className="stream-table" style={{ marginBottom: '32px' }}>
                   <thead>
                     <tr><th>Model</th><th>Split</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>ROC-AUC</th><th>PR-AUC</th></tr>
                   </thead>
@@ -943,12 +1418,57 @@ export default function App() {
                   </tbody>
                 </table>
 
+                {/* Task 2B: Grouped BarChart for BABD-13 Benchmarks */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                   <Sliders size={18} color="var(--accent-cyan)" />
                   <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
-                    BABD-13 Benchmark Results
+                    BABD-13 Multi-Class Benchmark Evaluation
                   </h3>
                 </div>
+
+                {benchmarks.babd13_benchmarks && benchmarks.babd13_benchmarks.length > 0 && (
+                  <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
+                    <div style={{ width: '100%', height: 300 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={benchmarks.babd13_benchmarks.map(row => ({
+                            name: `${row.Model} (${row.Split})`,
+                            Accuracy: row.Accuracy !== null && row.Accuracy !== undefined ? Number(row.Accuracy.toFixed(4)) : 0,
+                            'Macro F1': row['Macro F1'] !== null && row['Macro F1'] !== undefined ? Number(row['Macro F1'].toFixed(4)) : 0,
+                            'Weighted F1': row['Weighted F1'] !== null && row['Weighted F1'] !== undefined ? Number(row['Weighted F1'].toFixed(4)) : 0,
+                          }))}
+                          margin={{ top: 10, right: 30, left: 0, bottom: 25 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
+                            axisLine={{ stroke: chartColors.borderColor }}
+                            interval={0}
+                            angle={-10}
+                            textAnchor="end"
+                          />
+                          <YAxis
+                            domain={[0, 1.0]}
+                            tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                            axisLine={{ stroke: chartColors.borderColor }}
+                          />
+                          <Tooltip content={<DarkChartTooltip />} />
+                          <Legend
+                            verticalAlign="top"
+                            align="right"
+                            wrapperStyle={{ paddingBottom: '10px' }}
+                            formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
+                          />
+                          <Bar dataKey="Accuracy" fill={chartColors.cyan} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Macro F1" fill={chartColors.gold} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Weighted F1" fill={chartColors.indigo} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
                 <table className="stream-table">
                   <thead>
                     <tr><th>Model</th><th>Split</th><th>Accuracy</th><th>Macro F1</th><th>Weighted F1</th><th>Macro Precision</th><th>Macro Recall</th></tr>
