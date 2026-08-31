@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import NetworkBackground from './components/NetworkBackground';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005';
 const WS_URL = import.meta.env.VITE_WS_URL || (
@@ -9,11 +8,6 @@ const WS_URL = import.meta.env.VITE_WS_URL || (
 );
 
 export default function App() {
-  // Theme state: defaults to 'light', persists in localStorage
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('bitsentinel_theme') || 'light';
-  });
-
   const [activeTab, setActiveTab] = useState('dashboard');
   const [kpis, setKpis] = useState(null);
   const [streamData, setStreamData] = useState([]);
@@ -30,12 +24,6 @@ export default function App() {
   const [networkClusters, setNetworkClusters] = useState(null);
   const [expandedNetworkTxid, setExpandedNetworkTxid] = useState(null);
   const [networkTxDetail, setNetworkTxDetail] = useState({});
-
-  // Sync theme with HTML root attribute
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('bitsentinel_theme', theme);
-  }, [theme]);
 
   // Load REST KPIs, Benchmarks, Wallet Clusters, and Network Alerts
   useEffect(() => {
@@ -144,47 +132,30 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Animated 2D Network Graph Canvas Background */}
-      <NetworkBackground theme={theme} />
-
       {/* Sidebar */}
       <div className="sidebar">
-        <div className="sidebar-top">
-          <div className="brand">
-            <div className="brand-icon">⚡</div>
-            <span>BitSentinel-AI</span>
-          </div>
-          <div className="nav-menu">
-            <button className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-              📊 Dashboard KPIs
-            </button>
-            <button className={`nav-item ${activeTab === 'stream' ? 'active' : ''}`} onClick={() => setActiveTab('stream')}>
-              📡 Live WebSocket Ticker
-            </button>
-            <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
-              🔍 Tx & Address Search
-            </button>
-            <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
-              🌐 Network Correlation
-            </button>
-            <button className={`nav-item ${activeTab === 'clusters' ? 'active' : ''}`} onClick={() => setActiveTab('clusters')}>
-              🔗 Wallet Clusters (Co-Spend)
-            </button>
-            <button className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
-              📈 Model Benchmarks
-            </button>
-          </div>
+        <div className="brand">
+          <div className="brand-icon">⚡</div>
+          <span>BitSentinel-AI</span>
         </div>
-
-        {/* Sidebar Footer with Light/Dark Theme Switcher */}
-        <div className="sidebar-footer">
-          <button 
-            className="theme-toggle-btn"
-            onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
-            title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
-            aria-label="Toggle visual theme"
-          >
-            {theme === 'light' ? '🌙 Switch to Dark' : '☀️ Switch to Light'}
+        <div className="nav-menu">
+          <button className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+            📊 Dashboard KPIs
+          </button>
+          <button className={`nav-item ${activeTab === 'stream' ? 'active' : ''}`} onClick={() => setActiveTab('stream')}>
+            📡 Live WebSocket Ticker
+          </button>
+          <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
+            🔍 Tx & Address Search
+          </button>
+          <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
+            🌐 Network Correlation
+          </button>
+          <button className={`nav-item ${activeTab === 'clusters' ? 'active' : ''}`} onClick={() => setActiveTab('clusters')}>
+            🔗 Wallet Clusters (Co-Spend)
+          </button>
+          <button className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
+            📈 Model Benchmarks
           </button>
         </div>
       </div>

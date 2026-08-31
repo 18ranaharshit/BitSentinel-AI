@@ -1,70 +1,9 @@
 /* ==============================================================================
-   BitSentinel-AI Design System — Light & Dark Refined Glassmorphism
+   BitSentinel-AI Design System — Premium Dark Glassmorphism
    ============================================================================== */
 
 :root {
-  /* Page & Panel Backgrounds (Light Mode Default) */
-  --bg-primary: #f4f6fb;
-  --bg-card: rgba(255, 255, 255, 0.78);
-  --bg-card-hover: rgba(255, 255, 255, 0.95);
-  --bg-panel-nested: rgba(241, 245, 249, 0.85);
-  --bg-code: #f8fafc;
-  --sidebar-bg: rgba(255, 255, 255, 0.92);
-  --input-bg: rgba(255, 255, 255, 0.95);
-  --input-border: rgba(15, 23, 42, 0.12);
-
-  /* Borders & Shadows */
-  --border-color: rgba(15, 23, 42, 0.08);
-  --border-subtle: rgba(15, 23, 42, 0.04);
-  --table-border: rgba(15, 23, 42, 0.06);
-  --table-header-bg: rgba(241, 245, 249, 0.7);
-  --table-row-hover: rgba(241, 245, 249, 0.65);
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-card: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-card-hover: 0 10px 25px -5px rgba(16, 24, 40, 0.08), 0 8px 10px -6px rgba(16, 24, 40, 0.04);
-
-  /* Typography */
-  --text-primary: #101828;
-  --text-secondary: #64748b;
-  --text-muted: #94a3b8;
-  --text-heading: #0f172a;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-
-  /* Accent Palette */
-  --accent-gold: #f7931a;     /* Bitcoin Orange */
-  --accent-indigo: #4f46e5;   /* Tech Trust Indigo */
-  --accent-cyan: #0891b2;     /* Data Cyan */
-  --accent-purple: #7c3aed;
-
-  /* Semantic Alert System (Light Mode High Legibility) */
-  --alert-critical: #dc2626;
-  --alert-critical-bg: rgba(220, 38, 38, 0.08);
-  --alert-critical-border: rgba(220, 38, 38, 0.25);
-  
-  --alert-high: #ea580c;
-  --alert-high-bg: rgba(234, 88, 12, 0.08);
-  --alert-high-border: rgba(234, 88, 12, 0.25);
-  
-  --alert-medium: #ca8a04;
-  --alert-medium-bg: rgba(202, 138, 4, 0.08);
-  --alert-medium-border: rgba(202, 138, 4, 0.25);
-  
-  --alert-low: #16a34a;
-  --alert-low-bg: rgba(22, 163, 74, 0.08);
-  --alert-low-border: rgba(22, 163, 74, 0.25);
-  
-  --alert-red: #dc2626;
-  --alert-green: #16a34a;
-
-  /* Header Gradient */
-  --header-gradient: linear-gradient(135deg, #0f172a, #475569);
-}
-
-/* ==============================================================================
-   Dark Theme Overrides
-   ============================================================================== */
-[data-theme="dark"] {
+  /* Page & Panel Backgrounds (Sleek Dark Theme) */
   --bg-primary: #0a0d14;
   --bg-card: rgba(22, 27, 38, 0.75);
   --bg-card-hover: rgba(30, 37, 52, 0.9);
@@ -74,6 +13,7 @@
   --input-bg: rgba(0, 0, 0, 0.4);
   --input-border: rgba(255, 255, 255, 0.08);
 
+  /* Borders & Shadows */
   --border-color: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.04);
   --table-border: rgba(255, 255, 255, 0.04);
@@ -83,16 +23,21 @@
   --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.25);
   --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.4);
 
+  /* Typography */
   --text-primary: #f0f4f8;
   --text-secondary: #8b98a5;
   --text-muted: #64748b;
   --text-heading: #ffffff;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  --accent-gold: #f7931a;
-  --accent-indigo: #818cf8;
-  --accent-cyan: #00d2ff;
+  /* Accent Palette */
+  --accent-gold: #f7931a;     /* Bitcoin Orange */
+  --accent-indigo: #818cf8;   /* Tech Trust Indigo */
+  --accent-cyan: #00d2ff;     /* Data Cyan */
   --accent-purple: #c084fc;
 
+  /* Semantic Alert System (Dark Mode Glow & High Contrast) */
   --alert-critical: #ff4d4d;
   --alert-critical-bg: rgba(255, 77, 77, 0.15);
   --alert-critical-border: rgba(255, 77, 77, 0.4);
@@ -112,6 +57,7 @@
   --alert-red: #ff4d4d;
   --alert-green: #00e676;
 
+  /* Header Gradient */
   --header-gradient: linear-gradient(135deg, #ffffff, #8b98a5);
 }
 
@@ -130,25 +76,11 @@ body {
   font-family: var(--font-sans);
   min-height: 100vh;
   overflow-x: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-/* Animated Canvas Layer */
-.network-bg-canvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 0;
 }
 
 .app-container {
   display: flex;
   min-height: 100vh;
-  position: relative;
-  z-index: 1;
 }
 
 /* ==============================================================================
@@ -158,16 +90,8 @@ body {
   width: 270px;
   background: var(--sidebar-bg);
   backdrop-filter: blur(16px);
-  border-right: 1px solid var(--border-color); /* Fixed 1fr -> 1px CSS bug */
+  border-right: 1px solid var(--border-color); /* Clean 1px border */
   padding: 24px 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 24px;
-  transition: background 0.3s ease, border-color 0.3s ease;
-}
-
-.sidebar-top {
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -228,38 +152,6 @@ body {
   font-weight: 600;
   background: rgba(247, 147, 26, 0.12);
   border-left: 3px solid var(--accent-gold);
-}
-
-/* Sidebar Footer & Theme Toggle */
-.sidebar-footer {
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.theme-toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--bg-panel-nested);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm);
-}
-
-.theme-toggle-btn:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--accent-indigo);
-  transform: translateY(-1px);
 }
 
 /* ==============================================================================
@@ -329,7 +221,7 @@ body {
 
 .kpi-card {
   background: var(--bg-card);
-  backdrop-filter: var(--card-backdrop);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 18px 20px;
@@ -382,13 +274,12 @@ body {
    ============================================================================== */
 .glass-panel {
   background: var(--bg-card);
-  backdrop-filter: var(--card-backdrop);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
   border-radius: 14px;
   padding: 24px;
   margin-bottom: 24px;
   box-shadow: var(--shadow-card);
-  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .panel-header {
@@ -451,7 +342,7 @@ body {
 
 .search-btn {
   background: var(--accent-gold);
-  color: #ffffff;
+  color: #000000;
   border: none;
   padding: 12px 24px;
   border-radius: 8px;
