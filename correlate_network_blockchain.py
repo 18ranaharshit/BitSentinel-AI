@@ -201,7 +201,7 @@ print("     a network sniffer cannot tell if a server is Binance or a ransomware
 print("  3. FIX 4 SOLUTION (CROSS-LAYER FUSION):")
 print("     By multiplying the Network Correlation Signal with the Blockchain Model Risk")
 print("     (Elliptic GNN + BABD-13 Category), legitimate exchanges are immediately filtered")
-print("     out (Blockchain Risk = 0), restoring detection precision back to 99%+!")
+print("     out (Blockchain Risk = 0), restoring detection precision to 96.75% (see Fix 4 benchmark).")
 print("=" * 80 + "\n")
 
 print(f"\n{SEP}")

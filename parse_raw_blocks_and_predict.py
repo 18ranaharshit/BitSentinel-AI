@@ -1,24 +1,28 @@
 """
 ==============================================================================
-Raw Block Feature Extraction & Real-Time Fraud Inference Engine
+Raw Block Feature Extraction & Real-Time Fraud Inference Engine (Ultra-Low RAM)
 ==============================================================================
-1. Scans raw block JSON files from raw data/600000-605999.
-2. Extracts transaction-level features and computes heuristic risk scores.
-3. Extracts address-level honest behavioral features from block outputs/inputs:
-     - total_received, tx_count, avg_value_per_tx, active_duration_sec, tx_frequency
-4. Loads trained reduced-feature BABD-13 model (models/babd13_reduced_model.pkl).
-5. Runs address classification on real derived features (NO random noise).
-6. Exports raw_block_predictions.csv and raw_address_predictions.csv for search & API.
+1. Scans raw block JSON files from raw data/600000-605999 (configurable via CLI).
+2. Direct disk streaming: Writes transactions immediately to disk per block,
+   consuming 0 MB of RAM for transaction accumulation.
+3. Chunked address classification: Evaluates millions of addresses in 250k-row
+   numpy batches, streaming directly to CSV.
+4. Resumable checkpointing via raw_inference_manifest.json.
 ==============================================================================
 """
 
+import os
+import gc
+import csv
 import json
 import pickle
+import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from feature_utils import calculate_tx_heuristic_score, build_elliptic_proxy_features
+from feature_utils import calculate_tx_heuristic_score
 
 RAW_BLOCKS_DIR = Path("raw data/600000-605999")
 MODELS_DIR = Path("models")
@@ -26,8 +30,27 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 SEP = "=" * 80
 
+# ------------------------------------------------------------------------------
+# CLI Arguments
+# ------------------------------------------------------------------------------
+parser = argparse.ArgumentParser(description="Raw Bitcoin Block Inference & Heuristic Scoring Engine")
+parser.add_argument(
+    "--max-blocks",
+    type=int,
+    default=20,
+    help="Number of new block folders to process (default: 20, use -1 for all available)."
+)
+parser.add_argument(
+    "--all",
+    action="store_true",
+    help="Process all available block folders on disk."
+)
+args = parser.parse_args()
+
+max_blocks = -1 if args.all else args.max_blocks
+
 print(f"\n{SEP}")
-print("  RAW BLOCK FEATURE EXTRACTION & FRAUD INFERENCE ENGINE")
+print("  RAW BLOCK FEATURE EXTRACTION & FRAUD INFERENCE ENGINE (STREAMING)")
 print(SEP)
 
 # Startup Disclaimer & Transparency Note
@@ -36,8 +59,11 @@ print("  NOTE: heuristic_score is a rule-based proxy, not the trained ML model's
 print("  because raw block transactions lack ground-truth labels needed to validate")
 print("  a proxy model against Elliptic's PCA-anonymized feature space.")
 print("  Address classifications are ML-driven using the trained reduced BABD-13 model.")
+print("  KPIs reflect only the blocks processed so far (tracked in models/raw_inference_manifest.json).")
 
+# ------------------------------------------------------------------------------
 # 1. Load trained models
+# ------------------------------------------------------------------------------
 print("\n[1] Loading trained model artifacts ...")
 
 babd_reduced_path = MODELS_DIR / "babd13_reduced_model.pkl"
@@ -57,149 +83,260 @@ label_names = babd_artifact["label_names"]
 print(f"    Loaded Reduced BABD-13 Address Classifier: {type(babd_model).__name__}")
 print(f"    Features Expected: {feature_names}")
 
-# 2. Parse sample blocks from raw block dataset
-print("\n[2] Parsing sample blocks from raw block dataset (600000-605999) ...")
-block_folders = sorted([d for d in RAW_BLOCKS_DIR.iterdir() if d.is_dir()])
-sample_folders = block_folders[:20]  # Process 20 blocks for inference
+# ------------------------------------------------------------------------------
+# 2. Checkpoint Manifest & Resumable Folder Discovery
+# ------------------------------------------------------------------------------
+manifest_path = MODELS_DIR / "raw_inference_manifest.json"
+manifest = {
+    "total_blocks_available": 0,
+    "blocks_processed_this_run": 0,
+    "cumulative_blocks_processed": 0,
+    "processed_folder_names": [],
+    "total_transactions_scored": 0,
+    "total_unique_addresses": 0,
+    "last_run_timestamp_utc": None,
+    "coverage_pct": 0.0
+}
 
-parsed_txs = []
-address_stats = {}
+if manifest_path.exists():
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except Exception as e:
+        print(f"    [!] Warning: could not parse existing manifest: {e}")
 
-for bfolder in sample_folders:
-    for jfile in bfolder.glob("*.json"):
-        try:
-            with open(jfile, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            tx_list = data.get("data", {}).get("list", [])
-            
-            for tx in tx_list:
-                tx_hash = tx.get("hash", "")
-                b_height = tx.get("block_height", 0)
-                b_time = tx.get("block_time", 0)
-                fee = tx.get("fee", 0)
-                inp_cnt = tx.get("inputs_count", 0)
-                out_cnt = tx.get("outputs_count", 0)
-                inp_val = tx.get("inputs_value", 0)
-                out_val = tx.get("outputs_value", 0)
-                size = tx.get("size", 0)
-                
-                heuristic_score = calculate_tx_heuristic_score(tx)
+if not RAW_BLOCKS_DIR.exists():
+    raise FileNotFoundError(f"Missing raw blocks directory: {RAW_BLOCKS_DIR}")
 
-                parsed_txs.append({
-                    "tx_hash": tx_hash,
-                    "block_height": b_height,
-                    "block_time": b_time,
-                    "fee": fee,
-                    "inputs_count": inp_cnt,
-                    "outputs_count": out_cnt,
-                    "inputs_value": inp_val,
-                    "outputs_value": out_val,
-                    "size": size,
-                    "value_btc": out_val / 1e8,
-                    "fee_btc": fee / 1e8,
-                    "heuristic_score": heuristic_score,
-                    "is_high_risk": heuristic_score >= 0.70
-                })
-                
-                # Extract outputs for address behavioral tracking
-                for out in tx.get("outputs", []):
-                    addrs = out.get("addresses", [])
-                    val = out.get("value", 0)
-                    for addr in addrs:
-                        if addr:
-                            if addr not in address_stats:
-                                address_stats[addr] = {
-                                    "tx_count": 0,
-                                    "total_received": 0.0,
-                                    "first_seen": b_time,
-                                    "last_seen": b_time
-                                }
-                            address_stats[addr]["tx_count"] += 1
-                            address_stats[addr]["total_received"] += float(val) / 1e8
-                            address_stats[addr]["last_seen"] = max(address_stats[addr]["last_seen"], b_time)
-                            
-        except Exception:
-            continue
+all_block_folders = sorted([d for d in RAW_BLOCKS_DIR.iterdir() if d.is_dir()])
+total_available = len(all_block_folders)
+manifest["total_blocks_available"] = total_available
 
-df_parsed_txs = pd.DataFrame(parsed_txs)
-print(f"    Successfully parsed {len(df_parsed_txs):,} transactions across {len(sample_folders)} blocks")
-print(f"    Unique Bitcoin addresses extracted: {len(address_stats):,}")
+processed_set = set(manifest.get("processed_folder_names", []))
+new_folders = [d for d in all_block_folders if d.name not in processed_set]
 
-# 3. Transaction-Level Heuristic Risk Assessment
-print("\n[3] Scoring Raw Block Transactions via Heuristic Risk Engine ...")
-df_suspicious_txs = df_parsed_txs.sort_values(by="heuristic_score", ascending=False)
+if max_blocks == -1:
+    folders_to_process = new_folders
+else:
+    folders_to_process = new_folders[:max_blocks]
 
-print("\n    Top 5 Highest Heuristic Risk Transactions in Raw Blocks:")
-top5_txs = df_suspicious_txs[["tx_hash", "block_height", "value_btc", "fee_btc", "inputs_count", "outputs_count", "heuristic_score"]].head(5)
-print(top5_txs.to_string(index=False))
+print(f"\n[2] Resumable Block Batch Configuration:")
+print(f"    - Total block folders on disk     : {total_available:,}")
+print(f"    - Previously processed folders    : {len(processed_set):,}")
+print(f"    - Unprocessed block folders       : {len(new_folders):,}")
+print(f"    - Folders to process in this run  : {len(folders_to_process):,} (Requested max: {'ALL' if max_blocks == -1 else max_blocks})")
 
-# 4. Address-Level Behavioral Classification (HONEST 5 Derived Features)
-print("\n[4] Extracting Honest Behavioral Features for Addresses & Classifying ...")
+# ------------------------------------------------------------------------------
+# 3. Direct-to-Disk Transaction Streaming & Address Tracking
+# ------------------------------------------------------------------------------
+output_tx_path = MODELS_DIR / "raw_block_predictions.csv"
+output_addr_path = MODELS_DIR / "raw_address_predictions.csv"
 
-addr_records = []
-for addr, s in address_stats.items():
-    tot_rec = s["total_received"]
-    tx_cnt = max(s["tx_count"], 1)
-    avg_val = tot_rec / tx_cnt
-    dur_sec = max(s["last_seen"] - s["first_seen"], 0)
-    freq = tx_cnt / max(dur_sec, 1)
-
-    addr_records.append({
-        "account": addr,
-        "total_received": tot_rec,
-        "tx_count": tx_cnt,
-        "avg_value_per_tx": avg_val,
-        "active_duration_sec": dur_sec,
-        "tx_frequency": freq
-    })
-
-addr_df = pd.DataFrame(addr_records)
-
-# Feature matrix corresponding strictly to the 5 trained features
-X_addr = addr_df[[
-    "total_received",
-    "tx_count",
-    "avg_value_per_tx",
-    "active_duration_sec",
-    "tx_frequency"
-]].values.astype(np.float32)
-
-# Predict on real computed features
-addr_preds = babd_model.predict(X_addr)
-addr_probs = babd_model.predict_proba(X_addr)
-confidences = np.max(addr_probs, axis=1)
-
-addr_df["predicted_class_idx"] = addr_preds
-addr_df["model_confidence"] = np.round(confidences, 4)
-addr_df["predicted_category"] = [
-    label_names.get(idx_to_label.get(idx, idx), f"Class {idx}")
-    for idx in addr_preds
+tx_headers = [
+    "tx_hash", "block_height", "block_time", "fee",
+    "inputs_count", "outputs_count", "inputs_value", "outputs_value",
+    "size", "value_btc", "fee_btc", "heuristic_score", "is_high_risk"
 ]
 
-# Print before/after verification
-print("\n" + "-" * 80)
-print("  VERIFICATION OF HONEST ADDRESS FEATURE SCORING (NO RANDOM NOISE):")
-print("  NOTE: Previous version used random noise instead of real features — this has been fixed.")
-print("-" * 80)
-sample_10 = addr_df[[
+# Check existing files
+tx_file_exists = output_tx_path.exists() and output_tx_path.stat().st_size > 0
+addr_file_exists = output_addr_path.exists() and output_addr_path.stat().st_size > 0
+
+# If starting fresh on all blocks (from folder 40), open append mode
+write_tx_mode = "a" if tx_file_exists and len(processed_set) > 0 else "w"
+
+# Open transaction CSV file stream
+tx_file = open(output_tx_path, mode=write_tx_mode, newline="", encoding="utf-8")
+tx_writer = csv.writer(tx_file)
+
+if write_tx_mode == "w":
+    tx_writer.writerow(tx_headers)
+
+address_stats = {}
+tx_count_this_run = 0
+
+if folders_to_process:
+    print(f"\n[3] Streaming {len(folders_to_process):,} block folders directly to disk ...")
+    
+    for idx, bfolder in enumerate(folders_to_process, 1):
+        if idx % 200 == 0 or idx == len(folders_to_process):
+            print(f"    Processing folder {idx:>5,d}/{len(folders_to_process):,} ({bfolder.name}) | Txs: {tx_count_this_run:>9,d} | Addrs: {len(address_stats):>9,d}")
+
+        for jfile in bfolder.glob("*.json"):
+            try:
+                with open(jfile, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                tx_list = data.get("data", {}).get("list", [])
+                
+                for tx in tx_list:
+                    tx_hash = tx.get("hash", "")
+                    b_height = tx.get("block_height", 0)
+                    b_time = tx.get("block_time", 0)
+                    fee = tx.get("fee", 0)
+                    inp_cnt = tx.get("inputs_count", 0)
+                    out_cnt = tx.get("outputs_count", 0)
+                    inp_val = tx.get("inputs_value", 0)
+                    out_val = tx.get("outputs_value", 0)
+                    size = tx.get("size", 0)
+                    
+                    heuristic_score = calculate_tx_heuristic_score(tx)
+                    val_btc = round(out_val / 1e8, 6)
+                    fee_btc = round(fee / 1e8, 6)
+                    is_high = heuristic_score >= 0.70
+
+                    # Write row directly to disk (0 RAM consumption)
+                    tx_writer.writerow([
+                        tx_hash, b_height, b_time, fee,
+                        inp_cnt, out_cnt, inp_val, out_val,
+                        size, val_btc, fee_btc, round(heuristic_score, 4), is_high
+                    ])
+                    tx_count_this_run += 1
+                    
+                    # Track address behavioral profile in compact memory
+                    for out in tx.get("outputs", []):
+                        addrs = out.get("addresses", [])
+                        val_sat = out.get("value", 0)
+                        for addr in addrs:
+                            if addr:
+                                if addr not in address_stats:
+                                    address_stats[addr] = [1, val_sat, b_time, b_time]
+                                else:
+                                    rec = address_stats[addr]
+                                    rec[0] += 1
+                                    rec[1] += val_sat
+                                    if b_time > rec[3]:
+                                        rec[3] = b_time
+                                
+            except Exception:
+                continue
+
+    tx_file.flush()
+    tx_file.close()
+
+print(f"\n    Finished streaming transactions to {output_tx_path}")
+
+# Count total scored transactions from disk
+try:
+    total_txs_final = sum(1 for _ in open(output_tx_path, "r", encoding="utf-8", errors="ignore")) - 1
+except Exception:
+    total_txs_final = tx_count_this_run
+
+print(f"    Total Scored Transactions on Disk: {total_txs_final:,}")
+
+# ------------------------------------------------------------------------------
+# 4. Chunked Streaming ML Inference on Address Features (Low Memory)
+# ------------------------------------------------------------------------------
+total_addrs = len(address_stats)
+print(f"\n[4] Classifying {total_addrs:,} unique addresses in 250,000-row chunks ...")
+
+CHUNK_SIZE = 250_000
+addr_keys = list(address_stats.keys())
+n_chunks = (total_addrs + CHUNK_SIZE - 1) // CHUNK_SIZE if total_addrs > 0 else 0
+
+write_addr_mode = "a" if addr_file_exists and len(processed_set) > 0 else "w"
+addr_header_needed = not (addr_file_exists and write_addr_mode == "a")
+
+addr_headers = [
     "account", "total_received", "tx_count", "avg_value_per_tx",
-    "active_duration_sec", "predicted_category", "model_confidence"
-]].head(10)
-print(sample_10.to_string(index=False))
-print("-" * 80)
+    "active_duration_sec", "tx_frequency", "predicted_class_idx",
+    "model_confidence", "predicted_category"
+]
 
-print("\n    Discovered Address Categories Distribution (Raw Blocks Sample):")
-print(addr_df["predicted_category"].value_counts().to_string())
+addr_file = open(output_addr_path, mode=write_addr_mode, newline="", encoding="utf-8")
+addr_writer = csv.writer(addr_file)
 
-# 5. Save artifacts for API, search, and frontend
-output_tx_path = MODELS_DIR / "raw_block_predictions.csv"
-df_suspicious_txs.to_csv(output_tx_path, index=False)
-print(f"\n[5] Saved Raw Block Transactions -> {output_tx_path}")
+if addr_header_needed:
+    addr_writer.writerow(addr_headers)
 
-output_addr_path = MODELS_DIR / "raw_address_predictions.csv"
-addr_df.to_csv(output_addr_path, index=False)
-print(f"    Saved Raw Address Predictions    -> {output_addr_path}")
+for chunk_idx in range(n_chunks):
+    start_i = chunk_idx * CHUNK_SIZE
+    end_i = min(start_i + CHUNK_SIZE, total_addrs)
+    chunk_keys = addr_keys[start_i:end_i]
+    chunk_len = len(chunk_keys)
+
+    print(f"    Running ML inference on chunk {chunk_idx + 1:>3,d}/{n_chunks:,} ({chunk_len:>7,d} addresses) ...")
+
+    X_chunk = np.empty((chunk_len, 5), dtype=np.float32)
+
+    for row_i, addr in enumerate(chunk_keys):
+        s = address_stats[addr]
+        tx_cnt = max(s[0], 1)
+        tot_rec = s[1] / 1e8
+        avg_val = tot_rec / tx_cnt
+        dur_sec = max(s[3] - s[2], 0)
+        freq = tx_cnt / max(dur_sec, 1)
+
+        X_chunk[row_i, 0] = tot_rec
+        X_chunk[row_i, 1] = tx_cnt
+        X_chunk[row_i, 2] = avg_val
+        X_chunk[row_i, 3] = dur_sec
+        X_chunk[row_i, 4] = freq
+
+    # ML Inference
+    preds = babd_model.predict(X_chunk)
+    probs = babd_model.predict_proba(X_chunk)
+    confs = np.round(np.max(probs, axis=1), 4)
+
+    for row_i, addr in enumerate(chunk_keys):
+        p_idx = int(preds[row_i])
+        cat_name = label_names.get(idx_to_label.get(p_idx, p_idx), f"Class {p_idx}")
+        
+        addr_writer.writerow([
+            addr,
+            round(float(X_chunk[row_i, 0]), 6),
+            int(X_chunk[row_i, 1]),
+            round(float(X_chunk[row_i, 2]), 6),
+            int(X_chunk[row_i, 3]),
+            round(float(X_chunk[row_i, 4]), 6),
+            p_idx,
+            confs[row_i],
+            cat_name
+        ])
+
+    del X_chunk, preds, probs, confs
+    gc.collect()
+
+addr_file.flush()
+addr_file.close()
+
+# Release dictionary
+del address_stats, addr_keys
+gc.collect()
+
+# Count total unique addresses on disk
+try:
+    final_addr_count = sum(1 for _ in open(output_addr_path, "r", encoding="utf-8", errors="ignore")) - 1
+except Exception:
+    final_addr_count = total_addrs
+
+# ------------------------------------------------------------------------------
+# 5. Update Manifest & Coverage Report
+# ------------------------------------------------------------------------------
+newly_processed_names = [d.name for d in folders_to_process]
+all_processed_names = sorted(list(processed_set.union(set(newly_processed_names))))
+
+manifest["blocks_processed_this_run"] = len(folders_to_process)
+manifest["processed_folder_names"] = all_processed_names
+manifest["cumulative_blocks_processed"] = len(all_processed_names)
+manifest["total_transactions_scored"] = int(total_txs_final)
+manifest["total_unique_addresses"] = int(final_addr_count)
+manifest["last_run_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
+manifest["coverage_pct"] = round((len(all_processed_names) / max(total_available, 1)) * 100.0, 2)
+
+with open(manifest_path, "w", encoding="utf-8") as f:
+    json.dump(manifest, f, indent=2)
 
 print(f"\n{SEP}")
-print("  RAW BLOCK FRAUD INFERENCE ENGINE COMPLETE")
+print("  [COVERAGE & INFERENCE SUMMARY]")
+print(f"    Blocks available on disk        : {manifest['total_blocks_available']:,}")
+print(f"    Blocks processed (this run)     : {manifest['blocks_processed_this_run']:,}")
+print(f"    Blocks processed (cumulative)   : {manifest['cumulative_blocks_processed']:,}")
+print(f"    Dataset coverage                : {manifest['coverage_pct']:.2f}%")
+print(f"    Total transactions scored       : {manifest['total_transactions_scored']:,}")
+print(f"    Total unique addresses scored   : {manifest['total_unique_addresses']:,}")
+print(f"    Manifest checkpoint saved       : {manifest_path}")
 print(SEP)
+
+print(f"\n{SEP}")
+print("  RAW BLOCK FRAUD INFERENCE ENGINE COMPLETE (STREAMING FINISHED)")
+print(f"{SEP}\n")

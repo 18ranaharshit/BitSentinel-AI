@@ -2,6 +2,8 @@
 
 An end-to-end Graph Neural Network (GNN), Multimodal Cross-Layer Correlation, and Machine Learning platform for real-time Bitcoin transaction monitoring, address entity resolution, and fraud risk detection.
 
+📄 **[Full Technical Write-Up](docs/TECHNICAL_WRITEUP.md)** — Comprehensive architecture, model choices, explainability methodology, and honest limitations disclosure.
+
 ---
 
 ## 🌟 Architecture & Highlights
@@ -128,6 +130,8 @@ npm run dev
 ## 📁 Repository Structure
 
 ```
+├── docs/
+│   └── TECHNICAL_WRITEUP.md        # Comprehensive technical report & PS deliverable
 ├── backend/
 │   ├── main.py                     # FastAPI REST & WebSocket Application
 │   └── network_alerts.py           # Network correlation REST API router

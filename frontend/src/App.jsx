@@ -205,6 +205,17 @@ export default function App() {
                 {kpis ? `${kpis.flagged_high_risk_btc_volume} BTC` : '...'}
               </span>
             </div>
+            {kpis && kpis.coverage_pct !== null && kpis.coverage_pct !== undefined && (
+              <div className="kpi-card">
+                <span className="kpi-title">Dataset Coverage</span>
+                <span className="kpi-value" style={{ color: '#00d2ff' }}>
+                  {kpis.coverage_pct}%
+                </span>
+                <span className="kpi-sub">
+                  {kpis.blocks_processed} / {kpis.blocks_available} blocks
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -249,6 +260,13 @@ export default function App() {
                 Streaming from Raw Blocks (Heuristic Score Proxy with Real-Time Explainability)
               </span>
             </div>
+
+            {streamData.length > 0 && streamData[0].stream_note && (
+              <div style={{ background: 'rgba(30, 41, 59, 0.6)', borderLeft: '3px solid #38bdf8', padding: '8px 14px', borderRadius: '4px', marginBottom: '16px', fontSize: '0.85rem', color: '#94a3b8' }}>
+                ℹ️ {streamData[0].stream_note}
+              </div>
+            )}
+
             <table className="stream-table">
               <thead>
                 <tr>
