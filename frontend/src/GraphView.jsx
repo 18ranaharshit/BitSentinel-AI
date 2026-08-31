@@ -54,7 +54,6 @@ export default function GraphView({
       .then((data) => {
         setGraphData(data);
         if (data.found && data.nodes && data.nodes.length > 0) {
-          // Select queried node by default
           const primaryNode = data.nodes.find((n) => n.is_queried) || data.nodes[0];
           setSelectedNode(primaryNode);
         }
@@ -70,11 +69,7 @@ export default function GraphView({
 
   // Cytoscape initialization and updates
   useEffect(() => {
-    if (!containerRef.current || !graphData || !graphData.found || !graphData.nodes) {
-      if (cyRef.current) {
-        cyRef.current.destroy();
-        cyRef.current = null;
-      }
+    if (!containerRef.current || !graphData || !graphData.found || !graphData.nodes || loading) {
       return;
     }
 
@@ -105,6 +100,7 @@ export default function GraphView({
 
     if (cyRef.current) {
       cyRef.current.destroy();
+      cyRef.current = null;
     }
 
     const cy = cytoscape({
@@ -175,13 +171,22 @@ export default function GraphView({
 
     cyRef.current = cy;
 
+    // Trigger resize & fit after container is ready
+    const timer = setTimeout(() => {
+      if (cyRef.current) {
+        cyRef.current.resize();
+        cyRef.current.fit(undefined, 35);
+      }
+    }, 100);
+
     return () => {
+      clearTimeout(timer);
       if (cyRef.current) {
         cyRef.current.destroy();
         cyRef.current = null;
       }
     };
-  }, [graphData, chartColors]);
+  }, [graphData, chartColors, loading]);
 
   const handleZoomIn = () => cyRef.current && cyRef.current.zoom(cyRef.current.zoom() * 1.25);
   const handleZoomOut = () => cyRef.current && cyRef.current.zoom(cyRef.current.zoom() * 0.8);

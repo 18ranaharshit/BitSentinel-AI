@@ -58,16 +58,22 @@ print("  NOTE: heuristic_score is a rule-based proxy, not the trained ML model's
 print("  because raw block transactions lack ground-truth labels needed to validate")
 print("  a proxy model against Elliptic's feature space.")
 
-# Load models for SHAP explainability
-babd_model_dict = None
-babd_model_path = MODELS_DIR / "babd13_reduced_model.pkl"
-if babd_model_path.exists():
-    try:
-        with open(babd_model_path, "rb") as f:
-            babd_model_dict = pickle.load(f)
-            print("  [+] Loaded BABD-13 reduced model for SHAP tree explanations.")
-    except Exception as e:
-        print(f"  [!] Could not load BABD-13 model: {e}")
+# Cached clusters dataframe
+_CLUSTERS_DF = None
+
+def _get_clusters_df():
+    global _CLUSTERS_DF
+    if _CLUSTERS_DF is None:
+        clusters_path = MODELS_DIR / "wallet_clusters.csv"
+        if clusters_path.exists():
+            try:
+                _CLUSTERS_DF = pd.read_csv(clusters_path, dtype={"cluster_id": str, "address": str, "cluster_size": int})
+                _CLUSTERS_DF["address_clean"] = _CLUSTERS_DF["address"].str.strip()
+            except Exception:
+                _CLUSTERS_DF = pd.DataFrame()
+        else:
+            _CLUSTERS_DF = pd.DataFrame()
+    return _CLUSTERS_DF
 
 app = FastAPI(title="BitSentinel-AI Fraud Detection Platform API", version="1.4.0")
 
@@ -361,22 +367,20 @@ def get_graph(entity_id: str):
         return addr
 
     # 1. Address Branch
-    if is_btc_address or (clusters_path.exists() and not is_tx_hash):
+    if is_btc_address or not is_tx_hash:
         cluster_siblings = []
         cluster_id = None
-        if clusters_path.exists():
-            try:
-                df_clusters = pd.read_csv(clusters_path)
-                match_cluster = df_clusters[df_clusters["address"].str.strip() == entity_str]
-                if not match_cluster.empty:
-                    cluster_id = str(match_cluster.iloc[0]["cluster_id"])
-                    cluster_rows = df_clusters[df_clusters["cluster_id"].astype(str) == cluster_id]
-                    # Ensure queried address is at the front
-                    all_addrs = [entity_str] + [a for a in cluster_rows["address"].str.strip().tolist() if a != entity_str]
-                    # Limit cluster nodes to 50 for clean graph visualization
-                    cluster_siblings = all_addrs[:50]
-            except Exception:
-                pass
+        
+        # Fast lookup via cached clusters df
+        df_clusters = _get_clusters_df()
+        if not df_clusters.empty:
+            match_cluster = df_clusters[df_clusters["address_clean"] == entity_str]
+            if not match_cluster.empty:
+                cluster_id = str(match_cluster.iloc[0]["cluster_id"])
+                cluster_rows = df_clusters[df_clusters["cluster_id"] == cluster_id]
+                # Ensure queried address is at the front
+                all_addrs = [entity_str] + [a for a in cluster_rows["address_clean"].tolist() if a != entity_str]
+                cluster_siblings = all_addrs[:50]
 
         # Check raw_address_predictions.csv for scored categories & confidence
         addr_scores = {}
@@ -384,12 +388,15 @@ def get_graph(entity_id: str):
 
         if raw_addr_path.exists():
             try:
+                # Fast bounded scan: search up to 4 chunks (1M rows) if in cluster, or full scan for single address
+                max_chunks = 4 if cluster_siblings else 35
+                chunks_read = 0
                 for chunk in pd.read_csv(raw_addr_path, chunksize=250_000, dtype={"account": str}):
-                    chunk["account_clean"] = chunk["account"].str.strip()
-                    matches = chunk[chunk["account_clean"].isin(all_target_addrs)]
+                    matches = chunk[chunk["account"].isin(all_target_addrs)]
                     for _, row in matches.iterrows():
-                        addr_scores[row["account_clean"]] = row
-                    if len(addr_scores) == len(all_target_addrs):
+                        addr_scores[str(row["account"])] = row
+                    chunks_read += 1
+                    if len(addr_scores) == len(all_target_addrs) or chunks_read >= max_chunks:
                         break
             except Exception:
                 pass
