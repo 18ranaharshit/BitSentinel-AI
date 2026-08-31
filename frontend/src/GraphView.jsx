@@ -19,7 +19,8 @@ import {
   Network,
   Activity,
   Globe,
-  Radio
+  Radio,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function GraphView({
@@ -47,11 +48,11 @@ export default function GraphView({
     }
   }, [entityId]);
 
-  // Helper to determine node color based on risk score
-  const getNodeColor = (riskScore, type) => {
+  // Helper to determine node color strictly from verified model output
+  const getNodeColor = (riskScore, type, isScored) => {
     if (type === 'ip') return '#a855f7'; // Purple for IP Nodes
     if (type === 'tx') return '#00d2ff'; // Cyan for Transaction Nodes
-    if (riskScore === null || riskScore === undefined) return '#64748b'; // Slate gray for unscored
+    if (!isScored || riskScore === null || riskScore === undefined) return '#475569'; // Slate gray for unscored
     if (riskScore >= 0.80) return '#ff4d4d'; // Critical (>=80)
     if (riskScore >= 0.60) return '#fb923c'; // High Risk (60-79)
     return '#00e676'; // Low Risk (<60)
@@ -133,7 +134,9 @@ export default function GraphView({
           risk_score: n.risk_score,
           category: n.category,
           is_queried: n.is_queried,
-          color: getNodeColor(n.risk_score, n.type),
+          is_scored: n.is_scored !== false && n.risk_score !== null,
+          is_estimated: Boolean(n.is_estimated),
+          color: getNodeColor(n.risk_score, n.type, n.is_scored !== false && n.risk_score !== null),
           rawNode: n
         }
       })),
@@ -143,7 +146,7 @@ export default function GraphView({
           id: `e-${idx}-${e.source}-${e.target}`,
           source: e.source,
           target: e.target,
-          label: e.label || 'LINK'
+          label: e.label || 'co-spend'
         }
       }))
     ];
@@ -157,7 +160,7 @@ export default function GraphView({
       container: containerRef.current,
       elements,
       style: [
-        // 1. Wallets / Addresses (Circles)
+        // 1. Wallets / Addresses (Scored Circles)
         {
           selector: 'node[type="wallet"], node[type="address"]',
           style: {
@@ -182,7 +185,20 @@ export default function GraphView({
             'transition-duration': '0.2s'
           }
         },
-        // 2. Transactions (Cyan Rounded Squares)
+        // 2. Unscored / Estimated Wallets (Dashed border, Slate Grey, distinct style)
+        {
+          selector: 'node[!is_scored], node[?is_estimated]',
+          style: {
+            'shape': 'ellipse',
+            'background-color': '#334155',
+            'background-opacity': 0.65,
+            'border-width': 2,
+            'border-style': 'dashed',
+            'border-color': 'rgba(148, 163, 184, 0.75)',
+            'color': '#94a3b8'
+          }
+        },
+        // 3. Transactions (Cyan Rounded Squares)
         {
           selector: 'node[type="tx"]',
           style: {
@@ -205,7 +221,7 @@ export default function GraphView({
             'border-color': '#ffffff'
           }
         },
-        // 3. Network IP Nodes (Purple Diamonds)
+        // 4. Network IP Nodes (Purple Diamonds)
         {
           selector: 'node[type="ip"]',
           style: {
@@ -228,7 +244,7 @@ export default function GraphView({
             'border-color': '#e9d5ff'
           }
         },
-        // 4. Selected Node Glow
+        // 5. Selected Node Glow
         {
           selector: 'node:selected',
           style: {
@@ -239,9 +255,9 @@ export default function GraphView({
             'shadow-opacity': 0.9
           }
         },
-        // 5. Standard On-Chain Flow Edges (FROM / TO)
+        // 6. Co-Spend / Flow Edges
         {
-          selector: 'edge[label="FROM"], edge[label="TO"], edge[label="co-spend"]',
+          selector: 'edge[label="co-spend"], edge[label="FROM"], edge[label="TO"]',
           style: {
             'width': 2,
             'line-color': 'rgba(255, 255, 255, 0.25)',
@@ -258,7 +274,7 @@ export default function GraphView({
             'text-background-shape': 'roundrectangle'
           }
         },
-        // 6. Network Observed Broadcast Edges (Dashed Purple)
+        // 7. Network Observed Broadcast Edges (Dashed Purple)
         {
           selector: 'edge[label="OBSERVED"]',
           style: {
@@ -476,9 +492,44 @@ export default function GraphView({
         </div>
       </div>
 
+      {/* Data Completeness & Integrity Summary Banner */}
+      {graphData && graphData.data_completeness && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'rgba(15, 23, 42, 0.8)',
+          border: '1px solid var(--border-color)',
+          borderLeftWidth: '4px',
+          borderLeftColor: 'var(--accent-indigo)',
+          padding: '10px 16px',
+          borderRadius: '8px',
+          fontSize: '0.82rem',
+          color: 'var(--text-secondary)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={16} color="var(--accent-indigo)" style={{ flexShrink: 0 }} />
+            <span><strong>Data Completeness:</strong> {graphData.data_completeness}</span>
+          </div>
+          {graphData.nodes_scored_count !== undefined && (
+            <span style={{ fontSize: '0.74rem', background: 'var(--bg-card)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+              Verified Scores: {graphData.nodes_scored_count}/{graphData.nodes_total_count} nodes
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Edge Linkage Note Caption */}
+      {graphData && graphData.edges_note && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-panel-nested)', borderLeft: '3px solid var(--accent-gold)', padding: '10px 14px', borderRadius: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+          <Info size={16} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+          <span>{graphData.edges_note}</span>
+        </div>
+      )}
+
       {loading && (
         <div style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-          Computing multi-hop cross-layer topology intelligence ...
+          Loading verified graph intelligence ...
         </div>
       )}
 
@@ -529,15 +580,19 @@ export default function GraphView({
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ff4d4d' }}></span>
-                <span style={{ color: 'var(--text-secondary)' }}>Critical Wallet (≥80)</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Critical Wallet (≥80%)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#fb923c' }}></span>
-                <span style={{ color: 'var(--text-secondary)' }}>High Risk Wallet (60-79)</span>
+                <span style={{ color: 'var(--text-secondary)' }}>High Risk Wallet (60-79%)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#00e676' }}></span>
-                <span style={{ color: 'var(--text-secondary)' }}>Low Risk Wallet</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Low Risk Wallet (&lt;60%)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#334155', border: '1.5px dashed #94a3b8' }}></span>
+                <span style={{ color: '#94a3b8' }}>Unscored Sibling (No ML Score)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#00d2ff' }}></span>
@@ -546,7 +601,7 @@ export default function GraphView({
               {includeIp && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ width: '10px', height: '10px', transform: 'rotate(45deg)', background: '#a855f7' }}></span>
-                  <span style={{ color: '#e9d5ff', fontWeight: 600 }}>Network IP Node</span>
+                  <span style={{ color: '#e9d5ff', fontWeight: 600 }}>Network IP Node (Real BGP)</span>
                 </div>
               )}
             </div>
@@ -569,12 +624,12 @@ export default function GraphView({
                 <span>Engine: </span>
                 <strong style={{ color: 'var(--text-primary)' }}>FastAPI + NetworkX & GraphSAGE GNN</strong>
                 <span style={{ margin: '0 8px' }}>|</span>
-                <span>ML Model: </span>
-                <strong style={{ color: 'var(--accent-gold)' }}>BABD-13 Random Forest + Self-Supervised Embeddings</strong>
+                <span>Data Integrity: </span>
+                <strong style={{ color: 'var(--accent-cyan)' }}>Strict Verification (Zero Synthetic Fallbacks)</strong>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--alert-low)' }}></span>
-                <span style={{ color: 'var(--alert-low)', fontWeight: 600 }}>Cross-Layer Active</span>
+                <span style={{ color: 'var(--alert-low)', fontWeight: 600 }}>Cross-Layer Verified</span>
               </div>
             </div>
           </div>
@@ -623,7 +678,7 @@ export default function GraphView({
                       {selectedNode.category}
                     </span>
                   )}
-                  {selectedNode.risk_score !== null && selectedNode.risk_score !== undefined && (
+                  {selectedNode.risk_score !== null && selectedNode.risk_score !== undefined ? (
                     <span style={{
                       background: selectedNode.risk_score >= 0.70 ? 'var(--alert-critical-bg)' : 'var(--alert-low-bg)',
                       color: selectedNode.risk_score >= 0.70 ? 'var(--alert-critical)' : 'var(--alert-low)',
@@ -634,6 +689,18 @@ export default function GraphView({
                       fontWeight: 700
                     }}>
                       Risk: {(selectedNode.risk_score * (selectedNode.risk_score <= 1.0 ? 100 : 1)).toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span style={{
+                      background: 'rgba(51, 65, 85, 0.5)',
+                      color: '#94a3b8',
+                      border: '1px dashed rgba(148, 163, 184, 0.5)',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.74rem',
+                      fontWeight: 600
+                    }}>
+                      Not Individually Scored
                     </span>
                   )}
                 </div>
@@ -662,11 +729,11 @@ export default function GraphView({
 
                 {/* Node Forensic Explanation Box */}
                 {selectedNode.explanation && (
-                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeftWidth: '3px', borderLeftColor: selectedNode.type === 'ip' ? '#a855f7' : 'var(--accent-indigo)', padding: '10px 12px', borderRadius: '6px', marginBottom: '12px' }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeftWidth: '3px', borderLeftColor: selectedNode.type === 'ip' ? '#a855f7' : (selectedNode.risk_score !== null ? 'var(--accent-indigo)' : '#64748b'), padding: '10px 12px', borderRadius: '6px', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                      <Sparkles size={14} color={selectedNode.type === 'ip' ? '#c084fc' : 'var(--accent-indigo)'} />
-                      <span style={{ color: selectedNode.type === 'ip' ? '#c084fc' : 'var(--accent-indigo)', fontSize: '0.72rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        Forensic Explainability:
+                      <Sparkles size={14} color={selectedNode.type === 'ip' ? '#c084fc' : (selectedNode.risk_score !== null ? 'var(--accent-indigo)' : '#94a3b8')} />
+                      <span style={{ color: selectedNode.type === 'ip' ? '#c084fc' : (selectedNode.risk_score !== null ? 'var(--accent-indigo)' : '#94a3b8'), fontSize: '0.72rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Forensic Intelligence:
                       </span>
                     </div>
                     <p style={{ color: 'var(--text-primary)', fontSize: '0.82rem', margin: 0, lineHeight: '1.4' }}>
@@ -675,7 +742,7 @@ export default function GraphView({
                   </div>
                 )}
 
-                {/* Feature Attribution Bar Chart */}
+                {/* Feature Attribution Bar Chart (Only when real factors exist) */}
                 {selectedNode.top_factors && selectedNode.top_factors.length > 0 && FactorBarChartComponent && (
                   <FactorBarChartComponent factors={selectedNode.top_factors} chartColors={chartColors} />
                 )}

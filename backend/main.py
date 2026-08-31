@@ -75,6 +75,17 @@ def _get_clusters_df():
             _CLUSTERS_DF = pd.DataFrame()
     return _CLUSTERS_DF
 
+# Load BABD-13 model for SHAP tree explanations
+babd_model_dict = None
+babd_model_path = MODELS_DIR / "babd13_reduced_model.pkl"
+if babd_model_path.exists():
+    try:
+        with open(babd_model_path, "rb") as f:
+            babd_model_dict = pickle.load(f)
+            print("  [+] Loaded BABD-13 reduced model for SHAP tree explanations.")
+    except Exception as e:
+        print(f"  [!] Could not load BABD-13 model: {e}")
+
 app = FastAPI(title="BitSentinel-AI Fraud Detection Platform API", version="1.4.0")
 
 # Enable CORS for React frontend
@@ -369,21 +380,24 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
     }
 
 
-# Cached network alerts sample for IP layer correlation
-_ALERTS_SAMPLE = None
+# Fast lookup helper for genuine network correlation records
+_ALERTS_BY_TXID = None
 
-def _get_alerts_sample():
-    global _ALERTS_SAMPLE
-    if _ALERTS_SAMPLE is None:
+def _get_alerts_lookup():
+    global _ALERTS_BY_TXID
+    if _ALERTS_BY_TXID is None:
         alerts_path = MODELS_DIR / "network_correlated_alerts.csv"
+        _ALERTS_BY_TXID = {}
         if alerts_path.exists():
             try:
-                _ALERTS_SAMPLE = pd.read_csv(alerts_path, nrows=200).to_dict(orient="records")
+                df_alerts = pd.read_csv(alerts_path, nrows=500).fillna("")
+                for _, row in df_alerts.iterrows():
+                    txid_str = str(row.get("txid", "")).strip()
+                    if txid_str and txid_str not in _ALERTS_BY_TXID:
+                        _ALERTS_BY_TXID[txid_str] = row.to_dict()
             except Exception:
-                _ALERTS_SAMPLE = []
-        else:
-            _ALERTS_SAMPLE = []
-    return _ALERTS_SAMPLE
+                _ALERTS_BY_TXID = {}
+    return _ALERTS_BY_TXID
 
 
 @app.get("/api/graph/{entity_id}")
@@ -393,10 +407,10 @@ def get_graph(
     include_ip: bool = Query(True, description="Toggle physical network IP/ASN layer")
 ):
     """
-    Returns heterogeneous cross-layer investigation graph:
-      - Wallets / Addresses (Circles, colored by risk)
-      - Transactions (Cyan Rounded Squares, with directed FROM/TO flows)
-      - Network IPs (Purple Diamonds, with OBSERVED broadcast telemetry)
+    Returns verified cross-layer investigation graph:
+      - Wallets / Addresses (Circles, colored strictly by verified ML risk; unscored nodes marked explicitly with null)
+      - Transactions (Verified on-chain transactions only)
+      - Network IPs (Verified BGP ASN/IP telemetry records only; never fabricated)
     """
     entity_str = entity_id.strip()
     is_tx_hash = bool(re.fullmatch(r"^[0-9a-fA-F]{64}$", entity_str))
@@ -423,11 +437,11 @@ def get_graph(
                 cluster_rows = df_clusters[df_clusters["cluster_id"] == cluster_id]
                 all_addrs = [entity_str] + [a for a in cluster_rows["address_clean"].tolist() if a != entity_str]
                 
-                # Determine node limit based on hops
-                limit = 7 if hops == 1 else (15 if hops == 2 else 26)
+                # Determine honest node limit based on hops
+                limit = 8 if hops == 1 else (18 if hops == 2 else 35)
                 cluster_siblings = all_addrs[:limit]
 
-        # Fast bounded scan for address ML score
+        # Bounded scan for genuine address ML scores from raw_address_predictions.csv
         addr_scores = {}
         all_target_addrs = set(cluster_siblings) if cluster_siblings else {entity_str}
         if raw_addr_path.exists():
@@ -445,31 +459,65 @@ def get_graph(
                 pass
 
         if not cluster_siblings and entity_str not in addr_scores:
-            return {
-                "found": False,
-                "entity_id": entity_str,
-                "message": f"No graph data available for address '{entity_str}'."
-            }
+            if is_btc_address:
+                # Valid Bitcoin address with no cluster siblings and no ML score
+                node_obj = {
+                    "id": entity_str,
+                    "label": _format_addr_label(entity_str),
+                    "type": "wallet",
+                    "risk_score": None,
+                    "category": None,
+                    "is_queried": True,
+                    "is_scored": False,
+                    "is_estimated": True,
+                    "risk_score_status": "not_scored",
+                    "cluster_id": None,
+                    "explanation": "Queried address has no individual ML risk prediction.",
+                    "top_factors": []
+                }
+                return {
+                    "found": True,
+                    "entity_id": entity_str,
+                    "entity_type": "address",
+                    "cluster_id": None,
+                    "hops": hops,
+                    "include_ip": include_ip,
+                    "data_completeness": "0 of 1 nodes have verified model scores; 1 address in this cluster is unscored.",
+                    "nodes_scored_count": 0,
+                    "nodes_total_count": 1,
+                    "nodes": [node_obj],
+                    "edges": [],
+                    "edges_note": "Single address view: No co-spend cluster siblings found in current heuristic partition."
+                }
+            else:
+                return {
+                    "found": False,
+                    "entity_id": entity_str,
+                    "message": f"No graph data available for address '{entity_str}'."
+                }
 
         nodes = []
         edges = []
         addrs_to_build = cluster_siblings if cluster_siblings else [entity_str]
 
-        # A. Build Wallet Nodes
-        for idx, addr in enumerate(addrs_to_build):
+        # Build genuine Wallet Nodes without any hash-based or hardcoded number fabrication
+        for addr in addrs_to_build:
             scored_row = addr_scores.get(addr)
+            is_queried = bool(addr == entity_str)
+
             if scored_row is not None:
-                risk_score = float(scored_row.get("model_confidence", 0.75))
-                category = str(scored_row.get("predicted_category", "High Risk"))
+                risk_score = float(scored_row.get("model_confidence", 0.0))
+                category = str(scored_row.get("predicted_category", "Unknown"))
+                is_scored = True
+                is_estimated = False
+                risk_status = "scored"
             else:
-                # Deterministic plausible fallback scores for cluster visual demo
-                h_val = abs(hash(addr)) % 100
-                if idx == 0:
-                    risk_score = 0.88  # Focal is high/critical for forensic focus
-                    category = "Mining pool" if "1" in addr else "Centralized exchange"
-                else:
-                    risk_score = round(0.40 + (h_val % 45) / 100.0, 2)
-                    category = "Gambling" if h_val > 70 else ("Service" if h_val > 40 else "P2P User")
+                # Honest unscored node representation - zero fabricated scores
+                risk_score = None
+                category = None
+                is_scored = False
+                is_estimated = True
+                risk_status = "not_scored"
 
             node_obj = {
                 "id": addr,
@@ -477,96 +525,89 @@ def get_graph(
                 "type": "wallet",
                 "risk_score": risk_score,
                 "category": category,
-                "is_queried": bool(addr == entity_str),
+                "is_queried": is_queried,
+                "is_scored": is_scored,
+                "is_estimated": is_estimated,
+                "risk_score_status": risk_status,
                 "cluster_id": cluster_id
             }
 
-            if addr == entity_str and scored_row is not None:
-                explanation, top_factors = _explain_address(scored_row)
-                node_obj["explanation"] = explanation
-                node_obj["top_factors"] = top_factors
-            elif addr == entity_str:
-                node_obj["explanation"] = f"Co-spend entity linkage: Address is co-spent with {len(cluster_siblings)-1} sibling addresses under entity cluster {cluster_id or 'CL-00001'}."
-                node_obj["top_factors"] = [
-                    {"label": "Co-Spend Cluster Degree", "contribution": 0.35, "direction": "risk", "value": f"{len(cluster_siblings)} addrs"},
-                    {"label": "Multi-Input Aggregation", "contribution": 0.22, "direction": "risk", "value": "Common Ownership"},
-                    {"label": "On-Chain Temporal Density", "contribution": -0.08, "direction": "safe", "value": "Standard"}
-                ]
+            if is_queried:
+                if is_scored and scored_row is not None:
+                    explanation, top_factors = _explain_address(scored_row)
+                    node_obj["explanation"] = explanation
+                    node_obj["top_factors"] = top_factors
+                elif cluster_id is not None:
+                    node_obj["explanation"] = f"Co-spend entity linkage: Address belongs to cluster {cluster_id} with {len(cluster_siblings)-1} sibling addresses, but has no individual ML risk score in the BABD-13 dataset."
+                    node_obj["top_factors"] = []
+                else:
+                    node_obj["explanation"] = "Queried address has no individual ML risk prediction."
+                    node_obj["top_factors"] = []
+            else:
+                if not is_scored:
+                    node_obj["explanation"] = f"Sibling address co-spent under entity {cluster_id or 'cluster'}. No individual ML prediction available."
+                    node_obj["top_factors"] = []
 
             nodes.append(node_obj)
 
-        # B. Build Intermediate Transaction Nodes (Directed FROM -> TX -> TO Flow)
-        siblings_only = [a for a in addrs_to_build if a != entity_str]
-        tx_count = max(1, min(4, (len(siblings_only) + 2) // 3))
-        
-        tx_nodes = []
-        for t_idx in range(tx_count):
-            tx_id = f"tx_{t_idx+1:03d}_{'seed' if t_idx == 0 else ('norm' if t_idx == 1 else 'hop')}"
-            tx_val = round(1.25 + (t_idx * 2.85), 3)
-            tx_node = {
-                "id": tx_id,
-                "label": tx_id,
-                "type": "tx",
-                "risk_score": 0.72 if t_idx == 0 else 0.45,
-                "value_btc": tx_val,
-                "explanation": f"On-chain transfer aggregating {tx_val} BTC across co-spent wallet inputs.",
-                "top_factors": [
-                    {"label": "Fee-to-Value Ratio", "contribution": 0.18, "direction": "risk", "value": "0.00045 BTC"},
-                    {"label": "Output Fan-Out", "contribution": 0.12, "direction": "risk", "value": f"{len(siblings_only)} outs"}
-                ]
-            }
-            nodes.append(tx_node)
-            tx_nodes.append(tx_id)
+        # Build genuine co-spend cluster topology edges (direct Union-Find entity linkage)
+        if cluster_siblings and len(cluster_siblings) > 1:
+            for sibling in cluster_siblings:
+                if sibling != entity_str:
+                    edges.append({
+                        "source": entity_str,
+                        "target": sibling,
+                        "label": "co-spend"
+                    })
 
-            # Edge: Queried Wallet -> Tx (FROM)
-            edges.append({
-                "source": entity_str,
-                "target": tx_id,
-                "label": "FROM"
-            })
-
-        # Distribute sibling wallets across transaction nodes
-        for idx, sibling_addr in enumerate(siblings_only):
-            assigned_tx = tx_nodes[idx % len(tx_nodes)]
-            # Edge: Tx -> Sibling Wallet (TO)
-            edges.append({
-                "source": assigned_tx,
-                "target": sibling_addr,
-                "label": "TO"
-            })
-
-        # C. Build Network IP Nodes (if include_ip is enabled)
+        # Attach real IP nodes ONLY if real matching telemetry exists in network_correlated_alerts.csv
         if include_ip:
-            alerts_sample = _get_alerts_sample()
-            ip_count = min(2, len(tx_nodes))
-            for i_idx in range(ip_count):
-                alert_record = alerts_sample[i_idx % len(alerts_sample)] if alerts_sample else None
-                ip_addr = alert_record.get("src_ip", f"198.51.100.{22 + i_idx * 15}") if alert_record else f"198.51.100.{22 + i_idx * 15}"
-                asn_name = alert_record.get("src_asn_name", "AMAZON-02 / Hosting Provider") if alert_record else "AMAZON-02"
-                subnet = alert_record.get("src_subnet24", f"{ip_addr.rsplit('.', 1)[0]}.0/24") if alert_record else "198.51.100.0/24"
-                country = alert_record.get("src_country", "US") if alert_record else "US"
+            alerts_lookup = _get_alerts_lookup()
+            matched_alerts = []
+            for txid_k, alert_rec in alerts_lookup.items():
+                if alert_rec.get("src_ip") and (entity_str in str(alert_rec.get("txid", ""))):
+                    matched_alerts.append(alert_rec)
+                    if len(matched_alerts) >= 2:
+                        break
 
-                ip_node_id = f"ip_{ip_addr}"
-                ip_node = {
-                    "id": ip_node_id,
-                    "label": ip_addr,
-                    "type": "ip",
-                    "ip": ip_addr,
-                    "subnet": subnet,
-                    "asn": alert_record.get("src_asn", "AS16509") if alert_record else "AS16509",
-                    "asn_name": asn_name,
-                    "country": country,
-                    "risk_score": 0.85 if i_idx == 0 else 0.55,
-                    "explanation": f"Network broadcast telemetry observed from {ip_addr} ({subnet}, {country}) via BGP {asn_name}."
-                }
-                nodes.append(ip_node)
+            for al in matched_alerts:
+                ip_addr = str(al.get("src_ip", "")).strip()
+                if ip_addr:
+                    ip_node_id = f"ip_{ip_addr}"
+                    if not any(n["id"] == ip_node_id for n in nodes):
+                        fused_p = al.get("fused_prob", 0.5)
+                        try:
+                            fused_p = float(fused_p)
+                        except Exception:
+                            fused_p = 0.5
 
-                # Connect IP -> Tx with dashed OBSERVED edge
-                edges.append({
-                    "source": ip_node_id,
-                    "target": tx_nodes[i_idx],
-                    "label": "OBSERVED"
-                })
+                        nodes.append({
+                            "id": ip_node_id,
+                            "label": ip_addr,
+                            "type": "ip",
+                            "ip": ip_addr,
+                            "subnet": str(al.get("src_subnet24", "N/A")),
+                            "asn": str(al.get("src_asn", "N/A")),
+                            "asn_name": str(al.get("src_asn_name", "N/A")),
+                            "country": str(al.get("src_country", "N/A")),
+                            "risk_score": fused_p,
+                            "is_scored": True,
+                            "is_estimated": False,
+                            "explanation": f"Verified network broadcast telemetry observed from {ip_addr} via {al.get('src_asn_name', 'ASN')}."
+                        })
+                        edges.append({
+                            "source": ip_node_id,
+                            "target": entity_str,
+                            "label": "OBSERVED"
+                        })
+
+        # Calculate genuine data completeness summary
+        scored_count = sum(1 for n in nodes if n.get("is_scored"))
+        unscored_count = len(nodes) - scored_count
+        if unscored_count > 0:
+            completeness_summary = f"{scored_count} of {len(nodes)} nodes have verified model scores; {unscored_count} addresses in this cluster are unscored."
+        else:
+            completeness_summary = f"All {len(nodes)} nodes have verified data."
 
         return {
             "found": True,
@@ -575,9 +616,12 @@ def get_graph(
             "cluster_id": cluster_id,
             "hops": hops,
             "include_ip": include_ip,
+            "data_completeness": completeness_summary,
+            "nodes_scored_count": scored_count,
+            "nodes_total_count": len(nodes),
             "nodes": nodes,
             "edges": edges,
-            "edges_note": None
+            "edges_note": None if cluster_siblings else "Single address view: No co-spend cluster siblings found in current heuristic partition."
         }
 
     # 2. Transaction Branch
@@ -598,56 +642,49 @@ def get_graph(
             score = float(tx[score_col])
             explanation, top_factors = _explain_tx(tx.to_dict(), score)
 
-            tx_node_id = f"tx_{str(tx['tx_hash'])[:8]}"
-            nodes = [
-                {
-                    "id": tx_node_id,
-                    "label": tx_node_id,
-                    "type": "tx",
-                    "risk_score": score,
-                    "category": "High Risk Alert" if score >= 0.70 else "Clean / Normal",
-                    "value_btc": float(tx.get("value_btc", 0)),
-                    "block_height": int(tx.get("block_height", 0)),
-                    "is_queried": True,
-                    "explanation": explanation,
-                    "top_factors": top_factors
-                }
-            ]
+            tx_hash_str = str(tx["tx_hash"])
+            tx_node = {
+                "id": tx_hash_str,
+                "label": f"Tx {tx_hash_str[:8]}...{tx_hash_str[-6:]}",
+                "type": "tx",
+                "risk_score": score,
+                "category": "High Risk Alert" if score >= 0.70 else "Clean / Normal",
+                "value_btc": float(tx.get("value_btc", 0)),
+                "block_height": int(tx.get("block_height", 0)),
+                "is_queried": True,
+                "is_scored": True,
+                "is_estimated": False,
+                "explanation": explanation,
+                "top_factors": top_factors
+            }
+
+            nodes = [tx_node]
             edges = []
 
-            # Add sample input wallets
-            in_wallet_1 = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
-            in_wallet_2 = "3398t1WpEZ73CNmQviecrn"
-            nodes.append({"id": in_wallet_1, "label": _format_addr_label(in_wallet_1), "type": "wallet", "risk_score": 0.75, "category": "Exchange"})
-            nodes.append({"id": in_wallet_2, "label": _format_addr_label(in_wallet_2), "type": "wallet", "risk_score": 0.85, "category": "High Risk"})
-            edges.append({"source": in_wallet_1, "target": tx_node_id, "label": "FROM"})
-            edges.append({"source": in_wallet_2, "target": tx_node_id, "label": "FROM"})
-
-            # Add sample output wallets
-            out_wallet_1 = "bc1qc7w2x55490t0w"
-            out_wallet_2 = "bc1q9d80d24j6kl9"
-            nodes.append({"id": out_wallet_1, "label": _format_addr_label(out_wallet_1), "type": "wallet", "risk_score": 0.25, "category": "Low Risk"})
-            nodes.append({"id": out_wallet_2, "label": _format_addr_label(out_wallet_2), "type": "wallet", "risk_score": 0.35, "category": "Low Risk"})
-            edges.append({"source": tx_node_id, "target": out_wallet_1, "label": "TO"})
-            edges.append({"source": tx_node_id, "target": out_wallet_2, "label": "TO"})
-
-            # Attach IP Layer if enabled
+            # Attach verified network IP ONLY if matching real alert entry exists in network correlation dataset
             if include_ip:
-                ip_addr = "198.51.100.22"
-                ip_node = {
-                    "id": f"ip_{ip_addr}",
-                    "label": ip_addr,
-                    "type": "ip",
-                    "ip": ip_addr,
-                    "subnet": "198.51.100.0/24",
-                    "asn": "AS16509",
-                    "asn_name": "AMAZON-02 / AWS Hosting",
-                    "country": "US",
-                    "risk_score": 0.82,
-                    "explanation": f"Network broadcast observed from {ip_addr} (198.51.100.0/24, US)."
-                }
-                nodes.append(ip_node)
-                edges.append({"source": f"ip_{ip_addr}", "target": tx_node_id, "label": "OBSERVED"})
+                alerts_lookup = _get_alerts_lookup()
+                matching_alert = alerts_lookup.get(tx_hash_str) or alerts_lookup.get(str(tx.get("txid", "")))
+                if matching_alert and matching_alert.get("src_ip"):
+                    ip_addr = str(matching_alert["src_ip"])
+                    ip_node_id = f"ip_{ip_addr}"
+                    nodes.append({
+                        "id": ip_node_id,
+                        "label": ip_addr,
+                        "type": "ip",
+                        "ip": ip_addr,
+                        "subnet": str(matching_alert.get("src_subnet24", "N/A")),
+                        "asn": str(matching_alert.get("src_asn", "N/A")),
+                        "asn_name": str(matching_alert.get("src_asn_name", "N/A")),
+                        "country": str(matching_alert.get("src_country", "N/A")),
+                        "risk_score": float(matching_alert.get("fused_prob", 0.5)),
+                        "is_scored": True,
+                        "is_estimated": False,
+                        "explanation": f"Verified network broadcast telemetry observed from {ip_addr} ({matching_alert.get('src_subnet24', '')}, {matching_alert.get('src_country', '')}) via BGP {matching_alert.get('src_asn_name', '')}."
+                    })
+                    edges.append({"source": ip_node_id, "target": tx_hash_str, "label": "OBSERVED"})
+
+            completeness_summary = f"1 of 1 transaction node has verified heuristic scoring."
 
             return {
                 "found": True,
@@ -655,9 +692,12 @@ def get_graph(
                 "entity_type": "tx",
                 "hops": hops,
                 "include_ip": include_ip,
+                "data_completeness": completeness_summary,
+                "nodes_scored_count": len(nodes),
+                "nodes_total_count": len(nodes),
                 "nodes": nodes,
                 "edges": edges,
-                "edges_note": None
+                "edges_note": "Transaction-level input/output address linkage is not currently captured by the ingestion pipeline; only verified transaction scoring and real network telemetry are shown."
             }
 
     return {
