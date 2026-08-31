@@ -17,6 +17,13 @@ import pandas as pd
 # Global explainer cache to avoid recomputing TreeExplainer overhead per request
 _EXPLAINER_CACHE = {}
 
+# BABD-13 categories that are inherently benign — should NOT be framed as "High Risk"
+BENIGN_CATEGORIES = {
+    "Centralized exchange", "Decentralized exchange", "Mining pool",
+    "Individual wallet", "Light service", "Payment processor",
+    "Exchange wallet", "Hosted wallet", "Other"
+}
+
 # Dictionary mapping raw feature column names to human-readable intelligence labels
 FEATURE_NAME_MAP = {
     # Multimodal Combined Risk Features
@@ -77,7 +84,7 @@ def _format_factor_clause(factor):
         return f"{label} ({val}, {dir_str}: {contrib:+.3f})"
 
 
-def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=1, top_n=3):
+def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=1, top_n=3, category_name=None):
     """
     Computes exact decision-path probability attribution across all trees in RF.
     Decomposes the predicted probability into: base_value + sum(contributions).
@@ -142,7 +149,14 @@ def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=
     predicted_p = mean_base_value + float(np.sum(mean_contributions))
     is_high_risk = bool(predicted_p >= 0.50)
 
-    if is_high_risk:
+    # Category-aware framing: benign BABD-13 categories get attribution language, not "High Risk"
+    use_benign_framing = category_name is not None and category_name in BENIGN_CATEGORIES
+
+    if use_benign_framing:
+        # Attribution mode: explain what drove the classification without risk language
+        clauses = [_format_factor_clause(f) for f in top_factors]
+        summary = f"Classified as '{category_name}' primarily due to: " + "; ".join(clauses) + "."
+    elif is_high_risk:
         clauses = [_format_factor_clause(f) for f in top_factors if f["contribution"] > 0]
         if not clauses:
             clauses = [_format_factor_clause(f) for f in top_factors]
@@ -165,10 +179,12 @@ def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=
     }
 
 
-def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, target_class_idx=1):
+def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, target_class_idx=1, category_name=None):
     """
     Computes SHAP or exact decision-tree path probability decomposition.
     Returns top_n features pushing toward or away from the target classification.
+    category_name: if provided, benign BABD-13 categories get attribution framing
+    instead of "High Risk" language.
     """
     if isinstance(feature_vector, (pd.DataFrame, pd.Series)):
         X = feature_vector.values.reshape(1, -1)
@@ -179,7 +195,7 @@ def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, targe
 
     explainer = get_tree_explainer(model)
     if explainer is None:
-        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n)
+        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n, category_name=category_name)
 
     try:
         shap_values = explainer.shap_values(X)
@@ -209,11 +225,22 @@ def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, targe
         factors.sort(key=lambda x: abs(x["contribution"]), reverse=True)
         top_factors = factors[:top_n]
 
-        # Check total sum for risk classification
-        total_p = float(np.sum(sv))
-        is_high_risk = bool(total_p >= 0.0)
+        # Use predict_proba for proper risk threshold (>= 0.50) instead of raw SHAP sum
+        try:
+            proba = model.predict_proba(X)
+            c_idx = min(target_class_idx, proba.shape[1] - 1)
+            predicted_p = float(proba[0, c_idx])
+        except Exception:
+            predicted_p = float(np.sum(sv))  # fallback
+        is_high_risk = bool(predicted_p >= 0.50)
 
-        if is_high_risk:
+        # Category-aware framing: benign BABD-13 categories get attribution language
+        use_benign_framing = category_name is not None and category_name in BENIGN_CATEGORIES
+
+        if use_benign_framing:
+            clauses = [_format_factor_clause(f) for f in top_factors]
+            summary = f"Classified as '{category_name}' primarily due to: " + "; ".join(clauses) + "."
+        elif is_high_risk:
             clauses = [_format_factor_clause(f) for f in top_factors if f["contribution"] > 0]
             if not clauses:
                 clauses = [_format_factor_clause(f) for f in top_factors]
@@ -235,7 +262,7 @@ def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, targe
         }
 
     except Exception:
-        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n)
+        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n, category_name=category_name)
 
 
 def explain_heuristic_prediction(tx_dict, score):

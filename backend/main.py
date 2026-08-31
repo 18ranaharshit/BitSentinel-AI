@@ -203,7 +203,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
             addr_row = None
             try:
                 for chunk in pd.read_csv(raw_addr_path, chunksize=250_000, dtype={"account": str}):
-                    match_addr = chunk[chunk["account"].str.lower() == query_str.lower()]
+                    match_addr = chunk[chunk["account"].str.strip() == query_str]
                     if not match_addr.empty:
                         addr_row = match_addr.iloc[0]
                         break
@@ -227,7 +227,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
                     m = babd_model_dict["model"]
                     pred_cat = str(addr_row["predicted_category"])
                     c_idx = list(m.classes_).index(pred_cat) if pred_cat in list(m.classes_) else 0
-                    exp_res = explain_tree_prediction(m, feat_vals, feat_names, top_n=3, target_class_idx=c_idx)
+                    exp_res = explain_tree_prediction(m, feat_vals, feat_names, top_n=3, target_class_idx=c_idx, category_name=pred_cat)
                     explanation_str = exp_res.get("summary", explanation_str)
                     top_factors = exp_res.get("top_factors", [])
 
@@ -254,7 +254,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
         # B. Check Co-Spend Wallet Clusters (Partial Match: in cluster, but not scored individually)
         if clusters_path.exists():
             df_clusters = pd.read_csv(clusters_path)
-            match_cluster = df_clusters[df_clusters["address"].str.lower() == query_str.lower()]
+            match_cluster = df_clusters[df_clusters["address"].str.strip() == query_str]
             if not match_cluster.empty:
                 c_row = match_cluster.iloc[0]
                 return {
@@ -413,7 +413,7 @@ def lookup_address_cluster(address: str):
 
     df_clusters = pd.read_csv(clusters_path)
     target_addr = address.strip()
-    match = df_clusters[df_clusters["address"].str.lower() == target_addr.lower()]
+    match = df_clusters[df_clusters["address"].str.strip() == target_addr]
 
     if match.empty:
         return {
@@ -451,37 +451,38 @@ async def websocket_stream(websocket: WebSocket):
         
         for bfolder in demo_block_folders:
             for jfile in bfolder.glob("*.json"):
+                # Parse file — safe to catch-and-skip on corrupt/missing JSON
                 try:
                     with open(jfile, "r", encoding="utf-8") as f:
                         data = json.load(f)
                     tx_list = data.get("data", {}).get("list", [])
-
-                    for tx in tx_list:
-                        score = calculate_tx_heuristic_score(tx)
-                        is_alert = bool(score >= 0.70)
-                        
-                        exp_res = explain_heuristic_prediction(tx, score)
-                        
-                        payload = {
-                            "tx_hash": str(tx.get("hash", "")),
-                            "block_height": int(tx.get("block_height", 0)),
-                            "block_time": int(tx.get("block_time", 0)),
-                            "value_btc": round(float(tx.get("outputs_value", 0) / 1e8), 6),
-                            "fee_btc": round(float(tx.get("fee", 0) / 1e8), 6),
-                            "inputs_count": int(tx.get("inputs_count", 0)),
-                            "outputs_count": int(tx.get("outputs_count", 0)),
-                            "heuristic_score": score,
-                            "is_alert": is_alert,
-                            "explanation": exp_res.get("summary"),
-                            "stream_mode": "historical_replay",
-                            "stream_note": "Replays a fixed historical block range for demo purposes; not a live mempool feed."
-                        }
-
-                        await websocket.send_text(json.dumps(payload))
-                        await asyncio.sleep(0.15)  # Stream pace
-
                 except Exception:
                     continue
+
+                # Stream transactions — let WebSocketDisconnect propagate
+                for tx in tx_list:
+                    score = calculate_tx_heuristic_score(tx)
+                    is_alert = bool(score >= 0.70)
+                    
+                    exp_res = explain_heuristic_prediction(tx, score)
+                    
+                    payload = {
+                        "tx_hash": str(tx.get("hash", "")),
+                        "block_height": int(tx.get("block_height", 0)),
+                        "block_time": int(tx.get("block_time", 0)),
+                        "value_btc": round(float(tx.get("outputs_value", 0) / 1e8), 6),
+                        "fee_btc": round(float(tx.get("fee", 0) / 1e8), 6),
+                        "inputs_count": int(tx.get("inputs_count", 0)),
+                        "outputs_count": int(tx.get("outputs_count", 0)),
+                        "heuristic_score": score,
+                        "is_alert": is_alert,
+                        "explanation": exp_res.get("summary"),
+                        "stream_mode": "historical_replay",
+                        "stream_note": "Replays a fixed historical block range for demo purposes; not a live mempool feed."
+                    }
+
+                    await websocket.send_text(json.dumps(payload))
+                    await asyncio.sleep(0.15)  # Stream pace
 
     except WebSocketDisconnect:
         print("WebSocket Client Disconnected")

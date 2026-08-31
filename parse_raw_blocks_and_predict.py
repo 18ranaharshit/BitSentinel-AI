@@ -155,6 +155,29 @@ if write_tx_mode == "w":
 address_stats = {}
 tx_count_this_run = 0
 
+# Pre-load address stats from existing CSV on resumed runs to accumulate across runs
+if len(processed_set) > 0 and addr_file_exists:
+    print("    [RESUME] Pre-loading existing address stats from raw_address_predictions.csv ...")
+    try:
+        for chunk in pd.read_csv(output_addr_path, chunksize=250_000, dtype={"account": str}):
+            for _, row in chunk.iterrows():
+                addr = str(row["account"])
+                tx_cnt = int(row.get("tx_count", 1))
+                tot_recv_sat = int(float(row.get("total_received", 0)) * 1e8)
+                # Use first/last_seen_block_time if available (backward compat)
+                first_bt = int(row["first_seen_block_time"]) if "first_seen_block_time" in row and pd.notna(row.get("first_seen_block_time")) else 0
+                last_bt = int(row["last_seen_block_time"]) if "last_seen_block_time" in row and pd.notna(row.get("last_seen_block_time")) else 0
+                if first_bt == 0 and last_bt == 0:
+                    dur_sec = int(row.get("active_duration_sec", 0))
+                    last_bt = dur_sec  # approximate
+                    first_bt = 0
+                address_stats[addr] = [tx_cnt, tot_recv_sat, first_bt, last_bt]
+        print(f"    [RESUME] Loaded {len(address_stats):,} previously-scored addresses into memory.")
+    except Exception as e:
+        print(f"    [!] Warning: could not pre-load address stats: {e}. Starting fresh.")
+        address_stats = {}
+
+
 if folders_to_process:
     print(f"\n[3] Streaming {len(folders_to_process):,} block folders directly to disk ...")
     
@@ -233,20 +256,17 @@ CHUNK_SIZE = 250_000
 addr_keys = list(address_stats.keys())
 n_chunks = (total_addrs + CHUNK_SIZE - 1) // CHUNK_SIZE if total_addrs > 0 else 0
 
-write_addr_mode = "a" if addr_file_exists and len(processed_set) > 0 else "w"
-addr_header_needed = not (addr_file_exists and write_addr_mode == "a")
-
+# Always rewrite full address file to avoid duplicates from partial overlap
 addr_headers = [
     "account", "total_received", "tx_count", "avg_value_per_tx",
     "active_duration_sec", "tx_frequency", "predicted_class_idx",
-    "model_confidence", "predicted_category"
+    "model_confidence", "predicted_category",
+    "first_seen_block_time", "last_seen_block_time"
 ]
 
-addr_file = open(output_addr_path, mode=write_addr_mode, newline="", encoding="utf-8")
+addr_file = open(output_addr_path, mode="w", newline="", encoding="utf-8")
 addr_writer = csv.writer(addr_file)
-
-if addr_header_needed:
-    addr_writer.writerow(addr_headers)
+addr_writer.writerow(addr_headers)
 
 for chunk_idx in range(n_chunks):
     start_i = chunk_idx * CHUNK_SIZE
@@ -281,6 +301,7 @@ for chunk_idx in range(n_chunks):
         p_idx = int(preds[row_i])
         cat_name = label_names.get(idx_to_label.get(p_idx, p_idx), f"Class {p_idx}")
         
+        s = address_stats[addr]
         addr_writer.writerow([
             addr,
             round(float(X_chunk[row_i, 0]), 6),
@@ -290,7 +311,9 @@ for chunk_idx in range(n_chunks):
             round(float(X_chunk[row_i, 4]), 6),
             p_idx,
             confs[row_i],
-            cat_name
+            cat_name,
+            int(s[2]),
+            int(s[3])
         ])
 
     del X_chunk, preds, probs, confs
@@ -319,7 +342,7 @@ manifest["blocks_processed_this_run"] = len(folders_to_process)
 manifest["processed_folder_names"] = all_processed_names
 manifest["cumulative_blocks_processed"] = len(all_processed_names)
 manifest["total_transactions_scored"] = int(total_txs_final)
-manifest["total_unique_addresses"] = int(final_addr_count)
+manifest["total_unique_addresses"] = int(total_addrs)  # use merged address_stats count
 manifest["last_run_timestamp_utc"] = datetime.now(timezone.utc).isoformat()
 manifest["coverage_pct"] = round((len(all_processed_names) / max(total_available, 1)) * 100.0, 2)
 
