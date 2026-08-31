@@ -145,7 +145,7 @@ def get_kpis():
             "coverage_pct": coverage_pct
         }
 
-    # Check cache validity (recompute if file mtime changed)
+    # Check cache validity
     file_mtime = raw_preds_path.stat().st_mtime
     if _KPI_CACHE["data"] is not None and _KPI_CACHE["timestamp"] == file_mtime:
         res = dict(_KPI_CACHE["data"])
@@ -154,7 +154,22 @@ def get_kpis():
         res["coverage_pct"] = coverage_pct
         return res
 
-    # Fast chunked computation across large CSV
+    # Check persisted summary file for instant (<1ms) response
+    kpi_summary_path = MODELS_DIR / "kpi_summary.json"
+    if kpi_summary_path.exists():
+        try:
+            with open(kpi_summary_path, "r", encoding="utf-8") as f:
+                saved_kpis = json.load(f)
+            saved_kpis["blocks_available"] = blocks_avail
+            saved_kpis["blocks_processed"] = blocks_proc
+            saved_kpis["coverage_pct"] = coverage_pct
+            _KPI_CACHE["timestamp"] = file_mtime
+            _KPI_CACHE["data"] = saved_kpis
+            return saved_kpis
+        except Exception:
+            pass
+
+    # Fast chunked computation across large CSV if no summary exists
     total_txs = 0
     high_risk_txs = 0
     total_vol = 0.0
@@ -168,7 +183,6 @@ def get_kpis():
             total_vol += float(chunk["value_btc"].sum())
             flagged_vol += float(chunk[high_mask]["value_btc"].sum())
     except Exception:
-        # Fallback to manifest numbers
         total_txs = manifest_txs or 16515165
 
     if manifest_txs and manifest_txs > total_txs:
@@ -189,6 +203,13 @@ def get_kpis():
     }
     _KPI_CACHE["timestamp"] = file_mtime
     _KPI_CACHE["data"] = cached_data
+
+    # Persist summary for subsequent instant cold-starts
+    try:
+        with open(kpi_summary_path, "w", encoding="utf-8") as f:
+            json.dump(cached_data, f, indent=2)
+    except Exception:
+        pass
 
     return cached_data
 

@@ -1,0 +1,11 @@
+{
+  "status": "ready",
+  "total_scored_transactions": 16515165,
+  "high_risk_alerts": 25829,
+  "risk_ratio_pct": 0.16,
+  "total_monitored_btc_volume": 60021339.94,
+  "flagged_high_risk_btc_volume": 126.75,
+  "blocks_available": 6000,
+  "blocks_processed": 6000,
+  "coverage_pct": 100.0
+}
