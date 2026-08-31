@@ -97,6 +97,19 @@ BABD_LABEL_NAMES = {
     13: "other_illicit"
 }
 
+# Explicit categorization of BABD-13 labels for downstream XAI & reporting
+BABD_ILLICIT_CATEGORIES = {
+    "Blackmail", "Darknet market", "Tumbler", "other_illicit"
+}
+# Note: "Gambling" is left excluded from benign categories as a regulated/high-risk-adjacent activity.
+BABD_BENIGN_CATEGORIES = {
+    "Centralized exchange",
+    "Mining pool",
+    "Individual wallet",
+    "Cyber-security service",
+    "P2P financial service",
+}
+
 # 2. Train Model
 print("\n[2] Training Reduced-Feature Random Forest Classifier (100 trees) ...")
 rf_reduced = RandomForestClassifier(
@@ -144,7 +157,9 @@ with open(save_path, "wb") as f:
         "feature_names": FEATURE_NAMES,
         "label_to_idx": label_to_idx,
         "idx_to_label": idx_to_label,
-        "label_names": BABD_LABEL_NAMES
+        "label_names": BABD_LABEL_NAMES,
+        "benign_categories": BABD_BENIGN_CATEGORIES,
+        "illicit_categories": BABD_ILLICIT_CATEGORIES
     }, f)
 
 print(f"\n[4] Saved Reduced-Feature Model -> {save_path}")

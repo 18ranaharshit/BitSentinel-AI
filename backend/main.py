@@ -226,7 +226,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
                 if babd_model_dict and "model" in babd_model_dict:
                     m = babd_model_dict["model"]
                     pred_cat = str(addr_row["predicted_category"])
-                    c_idx = list(m.classes_).index(pred_cat) if pred_cat in list(m.classes_) else 0
+                    c_idx = int(addr_row["predicted_class_idx"]) if "predicted_class_idx" in addr_row and pd.notna(addr_row["predicted_class_idx"]) else 0
                     exp_res = explain_tree_prediction(m, feat_vals, feat_names, top_n=3, target_class_idx=c_idx, category_name=pred_cat)
                     explanation_str = exp_res.get("summary", explanation_str)
                     top_factors = exp_res.get("top_factors", [])

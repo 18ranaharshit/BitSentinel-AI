@@ -17,11 +17,20 @@ import pandas as pd
 # Global explainer cache to avoid recomputing TreeExplainer overhead per request
 _EXPLAINER_CACHE = {}
 
-# BABD-13 categories that are inherently benign — should NOT be framed as "High Risk"
+# ==============================================================================
+# AUTHORITATIVE BABD-13 CATEGORY TAXONOMY
+# WARNING: must be kept in sync with BABD_LABEL_NAMES in train_babd13_reduced_model.py — do not edit one without the other
+# ==============================================================================
+# BABD-13 categories that are inherently benign — receive category-attribution language instead of binary risk framing.
+# Excluded from benign:
+#   - Illicit (binary risk framing): "Blackmail", "Darknet market", "Tumbler", "other_illicit"
+#   - Regulated / high-risk-adjacent judgment call: "Gambling"
 BENIGN_CATEGORIES = {
-    "Centralized exchange", "Decentralized exchange", "Mining pool",
-    "Individual wallet", "Light service", "Payment processor",
-    "Exchange wallet", "Hosted wallet", "Other"
+    "Centralized exchange",
+    "Mining pool",
+    "Individual wallet",
+    "Cyber-security service",
+    "P2P financial service",
 }
 
 # Dictionary mapping raw feature column names to human-readable intelligence labels
@@ -84,7 +93,7 @@ def _format_factor_clause(factor):
         return f"{label} ({val}, {dir_str}: {contrib:+.3f})"
 
 
-def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=1, top_n=3, category_name=None):
+def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=1, top_n=3, category_name=None, benign_categories=None):
     """
     Computes exact decision-path probability attribution across all trees in RF.
     Decomposes the predicted probability into: base_value + sum(contributions).
@@ -150,7 +159,8 @@ def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=
     is_high_risk = bool(predicted_p >= 0.50)
 
     # Category-aware framing: benign BABD-13 categories get attribution language, not "High Risk"
-    use_benign_framing = category_name is not None and category_name in BENIGN_CATEGORIES
+    active_benign = benign_categories if benign_categories is not None else BENIGN_CATEGORIES
+    use_benign_framing = category_name is not None and category_name in active_benign
 
     if use_benign_framing:
         # Attribution mode: explain what drove the classification without risk language
@@ -179,12 +189,13 @@ def _exact_tree_path_decomposition(rf_model, X_sample, feature_names, class_idx=
     }
 
 
-def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, target_class_idx=1, category_name=None):
+def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, target_class_idx=1, category_name=None, benign_categories=None):
     """
     Computes SHAP or exact decision-tree path probability decomposition.
     Returns top_n features pushing toward or away from the target classification.
     category_name: if provided, benign BABD-13 categories get attribution framing
     instead of "High Risk" language.
+    benign_categories: optional set of category names to treat as benign (defaults to BENIGN_CATEGORIES).
     """
     if isinstance(feature_vector, (pd.DataFrame, pd.Series)):
         X = feature_vector.values.reshape(1, -1)
@@ -195,7 +206,7 @@ def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, targe
 
     explainer = get_tree_explainer(model)
     if explainer is None:
-        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n, category_name=category_name)
+        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n, category_name=category_name, benign_categories=benign_categories)
 
     try:
         shap_values = explainer.shap_values(X)
@@ -235,7 +246,8 @@ def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, targe
         is_high_risk = bool(predicted_p >= 0.50)
 
         # Category-aware framing: benign BABD-13 categories get attribution language
-        use_benign_framing = category_name is not None and category_name in BENIGN_CATEGORIES
+        active_benign = benign_categories if benign_categories is not None else BENIGN_CATEGORIES
+        use_benign_framing = category_name is not None and category_name in active_benign
 
         if use_benign_framing:
             clauses = [_format_factor_clause(f) for f in top_factors]
@@ -262,7 +274,7 @@ def explain_tree_prediction(model, feature_vector, feature_names, top_n=3, targe
         }
 
     except Exception:
-        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n, category_name=category_name)
+        return _exact_tree_path_decomposition(model, X, feature_names, class_idx=target_class_idx, top_n=top_n, category_name=category_name, benign_categories=benign_categories)
 
 
 def explain_heuristic_prediction(tx_dict, score):

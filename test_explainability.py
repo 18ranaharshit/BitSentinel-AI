@@ -120,7 +120,7 @@ if babd_path.exists() and raw_addr_path.exists():
         feat_vals = [raw_total_received, raw_tx_count, raw_avg_val, raw_active_sec, raw_tx_freq]
         pred_cat = str(sample_addr["predicted_category"])
         c_idx = list(babd_model.classes_).index(pred_cat) if pred_cat in list(babd_model.classes_) else 0
-        exp_addr = explain_tree_prediction(babd_model, feat_vals, addr_feat_names, top_n=3, target_class_idx=c_idx)
+        exp_addr = explain_tree_prediction(babd_model, feat_vals, addr_feat_names, top_n=3, target_class_idx=c_idx, category_name=pred_cat)
 
         print("\n[TEST CASE 3] Bitcoin Address Behavioral Classifier & Raw Vector Audit")
         print(f"  - Address              : {target_addr}")
