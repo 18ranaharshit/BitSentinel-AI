@@ -65,6 +65,22 @@ const DEFAULT_CHART_COLORS = {
   bgCard: 'rgba(22, 27, 38, 0.75)',
 };
 
+// Helper for formatting big numbers
+const formatCompactNumber = (num) => {
+  if (num === null || num === undefined) return '0';
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(1) + 'k';
+  return Number(num).toLocaleString();
+};
+
+const formatBtcVolume = (val) => {
+  if (val === null || val === undefined) return '0 BTC';
+  if (val >= 1e6) return (val / 1e6).toFixed(1) + 'M BTC';
+  if (val >= 1e3) return (val / 1e3).toFixed(1) + 'k BTC';
+  return Number(val).toFixed(2) + ' BTC';
+};
+
 // Dark Glassmorphic Custom Tooltip Component
 const DarkChartTooltip = ({ active, payload, label, valuePrefix = '', valueSuffix = '', formatter }) => {
   if (active && payload && payload.length) {
@@ -77,7 +93,8 @@ const DarkChartTooltip = ({ active, payload, label, valuePrefix = '', valueSuffi
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
         backdropFilter: 'blur(8px)',
         fontSize: '0.82rem',
-        color: '#f0f4f8'
+        color: '#f0f4f8',
+        zIndex: 100
       }}>
         {label && <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#ffffff' }}>{label}</div>}
         {payload.map((entry, index) => (
@@ -85,7 +102,7 @@ const DarkChartTooltip = ({ active, payload, label, valuePrefix = '', valueSuffi
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: entry.color || entry.fill }}></span>
             <span style={{ color: '#8b98a5' }}>{entry.name}:</span>
             <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-              {formatter ? formatter(entry.value, entry.name, entry) : `${valuePrefix}${entry.value}${valueSuffix}`}
+              {formatter ? formatter(entry.value, entry.name, entry) : `${valuePrefix}${typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value}${valueSuffix}`}
             </span>
           </div>
         ))}
@@ -324,6 +341,12 @@ export default function App() {
     }
   };
 
+  const totalScored = kpis?.total_scored_transactions || 0;
+  const highRiskCount = kpis?.high_risk_alerts || 0;
+  const normalCount = Math.max(0, totalScored - highRiskCount);
+  const highRiskPct = totalScored > 0 ? ((highRiskCount / totalScored) * 100).toFixed(2) : '0.00';
+  const normalPct = totalScored > 0 ? ((normalCount / totalScored) * 100).toFixed(2) : '100.00';
+
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -405,12 +428,12 @@ export default function App() {
             </div>
             <div className="kpi-card kpi-monitored">
               <span className="kpi-title">Monitored Volume</span>
-              <span className="kpi-value">{kpis ? `${kpis.total_monitored_btc_volume} BTC` : '...'}</span>
+              <span className="kpi-value">{kpis ? `${formatBtcVolume(kpis.total_monitored_btc_volume)}` : '...'}</span>
             </div>
             <div className="kpi-card kpi-flagged">
               <span className="kpi-title">Flagged Volume</span>
               <span className="kpi-value" style={{ color: 'var(--accent-gold)' }}>
-                {kpis ? `${kpis.flagged_high_risk_btc_volume} BTC` : '...'}
+                {kpis ? `${formatBtcVolume(kpis.flagged_high_risk_btc_volume)}` : '...'}
               </span>
             </div>
             {kpis && kpis.coverage_pct !== null && kpis.coverage_pct !== undefined && (
@@ -472,74 +495,166 @@ export default function App() {
               </div>
             </div>
 
-            {/* Task 3: Risk Composition Donut & Volume Comparison Charts */}
+            {/* Task 3: Polished Risk Composition Donut & Volume Comparison */}
             {kpis && kpis.status !== 'no_predictions_yet' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '24px' }}>
                 {/* Donut Chart: Risk Composition */}
                 <div className="feature-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <PieIcon size={18} color="var(--accent-gold)" />
-                    <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
-                      Transaction Risk Composition
-                    </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <PieIcon size={18} color="var(--accent-gold)" />
+                      <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                        Transaction Risk Composition
+                      </h3>
+                    </div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--accent-gold)', fontWeight: 600 }}>
+                      {highRiskPct}% Alert Rate
+                    </span>
                   </div>
-                  <div style={{ width: '100%', height: 220 }}>
+
+                  <div style={{ width: '100%', height: 210, position: 'relative' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={[
-                            { name: 'Normal Transactions', value: Math.max(0, (kpis.total_scored_transactions || 0) - (kpis.high_risk_alerts || 0)), color: chartColors.low },
-                            { name: 'High-Risk Alerts', value: kpis.high_risk_alerts || 0, color: chartColors.critical }
+                            { name: 'Normal / Benign', value: normalCount, color: chartColors.low },
+                            { name: 'High-Risk Alerts', value: highRiskCount, color: chartColors.critical }
                           ]}
                           cx="50%"
                           cy="50%"
-                          innerRadius={55}
+                          innerRadius={58}
                           outerRadius={80}
-                          paddingAngle={4}
+                          minAngle={14} // Ensures minority slice (0.16%) is clearly visible and clickable
                           dataKey="value"
-                          label={({ name, percent }) => `${(percent * 100).toFixed(1)}%`}
-                          labelLine={false}
+                          stroke="rgba(10, 13, 20, 0.8)"
+                          strokeWidth={2}
                         >
                           <Cell fill={chartColors.low} />
                           <Cell fill={chartColors.critical} />
                         </Pie>
-                        <Tooltip content={<DarkChartTooltip />} />
-                        <Legend
-                          verticalAlign="bottom"
-                          formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const d = payload[0];
+                              const pct = totalScored > 0 ? ((d.value / totalScored) * 100).toFixed(2) : 0;
+                              return (
+                                <div style={{
+                                  background: 'rgba(14, 18, 26, 0.95)',
+                                  border: `1px solid ${d.payload.color}`,
+                                  borderRadius: '8px',
+                                  padding: '8px 12px',
+                                  fontSize: '0.8rem',
+                                  color: '#f0f4f8'
+                                }}>
+                                  <div style={{ fontWeight: 'bold', color: d.payload.color }}>{d.name}</div>
+                                  <div style={{ color: '#8b98a5', marginTop: '2px' }}>Count: <span style={{ color: '#f0f4f8' }}>{Number(d.value).toLocaleString()}</span></div>
+                                  <div style={{ color: '#8b98a5' }}>Share: <span style={{ color: '#f0f4f8', fontWeight: 700 }}>{pct}%</span></div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
+
+                    {/* Donut Center Statistic */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      textAlign: 'center',
+                      pointerEvents: 'none'
+                    }}>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-heading)', fontFamily: 'var(--font-mono)' }}>
+                        {formatCompactNumber(totalScored)}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Total Txs
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Legend Breakdown */}
+                  <div style={{ display: 'flex', justifyContent: 'space-around', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: chartColors.low }}></span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Normal: <strong>{normalPct}%</strong> ({formatCompactNumber(normalCount)})</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: chartColors.critical }}></span>
+                      <span style={{ color: 'var(--text-secondary)' }}>High-Risk: <strong style={{ color: chartColors.critical }}>{highRiskPct}%</strong> ({Number(highRiskCount).toLocaleString()})</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Bar Chart: Monitored vs Flagged Volume */}
+                {/* Bar Chart: Monitored vs Flagged Volume with Clean Scale */}
                 <div className="feature-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <TrendingUp size={18} color="var(--accent-cyan)" />
-                    <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
-                      Monitored vs Flagged BTC Volume
-                    </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <TrendingUp size={18} color="var(--accent-cyan)" />
+                      <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                        Monitored vs Flagged BTC Volume
+                      </h3>
+                    </div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      Total: {formatBtcVolume(kpis.total_monitored_btc_volume)}
+                    </span>
                   </div>
-                  <div style={{ width: '100%', height: 220 }}>
+
+                  <div style={{ width: '100%', height: 210 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={[
-                          { name: 'Total Monitored', volume: kpis.total_monitored_btc_volume || 0, fill: chartColors.cyan },
-                          { name: 'Flagged High-Risk', volume: kpis.flagged_high_risk_btc_volume || 0, fill: chartColors.gold }
+                          { name: 'Total Monitored', volume: kpis.total_monitored_btc_volume || 0, formatted: formatBtcVolume(kpis.total_monitored_btc_volume), fill: chartColors.cyan },
+                          { name: 'Flagged High-Risk', volume: kpis.flagged_high_risk_btc_volume || 0, formatted: formatBtcVolume(kpis.flagged_high_risk_btc_volume), fill: chartColors.gold }
                         ]}
-                        margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
+                        margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
                         <XAxis dataKey="name" tick={{ fill: chartColors.textSecondary, fontSize: 11 }} axisLine={{ stroke: chartColors.borderColor }} />
-                        <YAxis tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} tickFormatter={(v) => `${v} BTC`} />
-                        <Tooltip content={<DarkChartTooltip valueSuffix=" BTC" />} />
+                        <YAxis
+                          width={70}
+                          tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                          axisLine={{ stroke: chartColors.borderColor }}
+                          tickFormatter={(v) => v >= 1e6 ? `${(v/1e6).toFixed(0)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}k` : `${v}`}
+                        />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const d = payload[0].payload;
+                              return (
+                                <div style={{
+                                  background: 'rgba(14, 18, 26, 0.95)',
+                                  border: `1px solid ${d.fill}`,
+                                  borderRadius: '8px',
+                                  padding: '8px 12px',
+                                  fontSize: '0.8rem',
+                                  color: '#f0f4f8'
+                                }}>
+                                  <div style={{ fontWeight: 'bold', color: '#ffffff' }}>{d.name}</div>
+                                  <div style={{ color: d.fill, marginTop: '3px', fontWeight: 700 }}>
+                                    Volume: {Number(d.volume).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} BTC
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
                         <Bar dataKey="volume" radius={[6, 6, 0, 0]}>
                           <Cell fill={chartColors.cyan} />
                           <Cell fill={chartColors.gold} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+
+                  {/* Volume Metric Highlights */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginTop: '4px', fontSize: '0.78rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Monitored: <strong style={{ color: chartColors.cyan }}>{formatBtcVolume(kpis.total_monitored_btc_volume)}</strong></span>
+                    <span style={{ color: 'var(--text-secondary)' }}>Flagged: <strong style={{ color: chartColors.gold }}>{formatBtcVolume(kpis.flagged_high_risk_btc_volume)}</strong></span>
                   </div>
                 </div>
               </div>
@@ -1360,7 +1475,7 @@ export default function App() {
 
                 {benchmarks.elliptic_benchmarks && benchmarks.elliptic_benchmarks.length > 0 && (
                   <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
-                    <div style={{ width: '100%', height: 300 }}>
+                    <div style={{ width: '100%', height: 320 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           data={benchmarks.elliptic_benchmarks.map(row => ({
@@ -1370,7 +1485,7 @@ export default function App() {
                             'F1-Score': row['F1-Score'] !== null && row['F1-Score'] !== undefined ? Number(row['F1-Score'].toFixed(4)) : 0,
                             'ROC-AUC': row['ROC-AUC'] !== null && row['ROC-AUC'] !== undefined ? Number(row['ROC-AUC'].toFixed(4)) : 0,
                           }))}
-                          margin={{ top: 10, right: 30, left: 0, bottom: 25 }}
+                          margin={{ top: 10, right: 30, left: 10, bottom: 35 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
                           <XAxis
@@ -1378,19 +1493,20 @@ export default function App() {
                             tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
                             axisLine={{ stroke: chartColors.borderColor }}
                             interval={0}
-                            angle={-10}
+                            angle={-8}
                             textAnchor="end"
                           />
                           <YAxis
                             domain={[0, 1.0]}
                             tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
                             axisLine={{ stroke: chartColors.borderColor }}
+                            tickFormatter={(v) => v.toFixed(1)}
                           />
                           <Tooltip content={<DarkChartTooltip />} />
                           <Legend
                             verticalAlign="top"
                             align="right"
-                            wrapperStyle={{ paddingBottom: '10px' }}
+                            wrapperStyle={{ paddingBottom: '12px' }}
                             formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
                           />
                           <Bar dataKey="Precision" fill={chartColors.cyan} radius={[4, 4, 0, 0]} />
@@ -1428,7 +1544,7 @@ export default function App() {
 
                 {benchmarks.babd13_benchmarks && benchmarks.babd13_benchmarks.length > 0 && (
                   <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
-                    <div style={{ width: '100%', height: 300 }}>
+                    <div style={{ width: '100%', height: 320 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           data={benchmarks.babd13_benchmarks.map(row => ({
@@ -1437,7 +1553,7 @@ export default function App() {
                             'Macro F1': row['Macro F1'] !== null && row['Macro F1'] !== undefined ? Number(row['Macro F1'].toFixed(4)) : 0,
                             'Weighted F1': row['Weighted F1'] !== null && row['Weighted F1'] !== undefined ? Number(row['Weighted F1'].toFixed(4)) : 0,
                           }))}
-                          margin={{ top: 10, right: 30, left: 0, bottom: 25 }}
+                          margin={{ top: 10, right: 30, left: 10, bottom: 35 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
                           <XAxis
@@ -1445,19 +1561,20 @@ export default function App() {
                             tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
                             axisLine={{ stroke: chartColors.borderColor }}
                             interval={0}
-                            angle={-10}
+                            angle={-8}
                             textAnchor="end"
                           />
                           <YAxis
                             domain={[0, 1.0]}
                             tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
                             axisLine={{ stroke: chartColors.borderColor }}
+                            tickFormatter={(v) => v.toFixed(1)}
                           />
                           <Tooltip content={<DarkChartTooltip />} />
                           <Legend
                             verticalAlign="top"
                             align="right"
-                            wrapperStyle={{ paddingBottom: '10px' }}
+                            wrapperStyle={{ paddingBottom: '12px' }}
                             formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
                           />
                           <Bar dataKey="Accuracy" fill={chartColors.cyan} radius={[4, 4, 0, 0]} />
