@@ -226,8 +226,6 @@ npm run dev -- --port 3005
 
 ## 8. Future Work
 
-1. **Standardized `requirements.txt`**: Consolidate PyTorch Geometric, LightGBM, and visualization dependencies into a version-pinned dependency lockfile.
-2. **Full Raw Block Ingestion**: Scale raw block JSON ingestion from the initial 20-folder sample to all 6,000 blocks using multiprocessing or Apache Arrow.
-3. **Authoritative BABD-13 Feature Verification**: Validate the reduced model feature mappings against the published BABD-13 schema.
-4. **Fused Address-Level Network Correlation**: Unify the Union-Find wallet clustering graph with network metadata so clusters of addresses can be attributed directly to BGP ASNs.
-5. **Live Bitcoin Core RPC / Mempool Ingestion**: Replace the scripted block replay with a live `bitcoind` ZeroMQ/RPC connector for real-time transaction ingestion.
+1. **Authoritative BABD-13 Feature Verification**: Validate the reduced model feature mappings against the published BABD-13 schema.
+2. **Fused Address-Level Network Correlation**: Unify the Union-Find wallet clustering graph with network metadata so clusters of addresses can be attributed directly to BGP ASNs.
+3. **Live Bitcoin Core RPC / Mempool Ingestion**: Replace the scripted block replay with a live `bitcoind` ZeroMQ/RPC connector for real-time transaction ingestion.
