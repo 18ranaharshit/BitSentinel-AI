@@ -1,4 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import {
+  ShieldAlert,
+  LayoutDashboard,
+  Radio,
+  Search,
+  Network,
+  Layers,
+  BarChart3,
+  Activity,
+  AlertTriangle,
+  Zap,
+  Cpu,
+  Tag,
+  Info,
+  Link2,
+  Fingerprint,
+  AlertOctagon,
+  CheckCircle2,
+  Sparkles,
+  FileSearch,
+  ChevronDown,
+  ChevronUp,
+  Share2,
+  Database,
+  Sliders
+} from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005';
 const WS_URL = import.meta.env.VITE_WS_URL || (
@@ -135,27 +161,35 @@ export default function App() {
       {/* Sidebar */}
       <div className="sidebar">
         <div className="brand">
-          <div className="brand-icon">⚡</div>
+          <div className="brand-icon">
+            <ShieldAlert size={20} color="var(--accent-gold)" />
+          </div>
           <span>BitSentinel-AI</span>
         </div>
         <div className="nav-menu">
           <button className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-            📊 Dashboard KPIs
+            <LayoutDashboard size={18} />
+            <span>Dashboard KPIs</span>
           </button>
           <button className={`nav-item ${activeTab === 'stream' ? 'active' : ''}`} onClick={() => setActiveTab('stream')}>
-            📡 Live WebSocket Ticker
+            <Radio size={18} />
+            <span>Live WebSocket Ticker</span>
           </button>
           <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
-            🔍 Tx & Address Search
+            <Search size={18} />
+            <span>Tx & Address Search</span>
           </button>
           <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
-            🌐 Network Correlation
+            <Network size={18} />
+            <span>Network Correlation</span>
           </button>
           <button className={`nav-item ${activeTab === 'clusters' ? 'active' : ''}`} onClick={() => setActiveTab('clusters')}>
-            🔗 Wallet Clusters (Co-Spend)
+            <Layers size={18} />
+            <span>Wallet Clusters</span>
           </button>
           <button className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
-            📈 Model Benchmarks
+            <BarChart3 size={18} />
+            <span>Model Benchmarks</span>
           </button>
         </div>
       </div>
@@ -170,6 +204,7 @@ export default function App() {
           </div>
           <div className="status-badge">
             <div className="status-dot" style={{ background: wsConnected ? 'var(--alert-low)' : 'var(--alert-critical)' }}></div>
+            <Activity size={14} style={{ marginLeft: '2px' }} />
             <span>{wsConnected ? 'WebSocket Live Feed Active' : 'REST Mode Active'}</span>
           </div>
         </div>
@@ -177,8 +212,11 @@ export default function App() {
         {/* Top KPI Cards */}
         {kpis && kpis.status === 'no_predictions_yet' ? (
           <div className="glass-panel" style={{ marginBottom: '24px', borderLeft: '4px solid var(--accent-gold)' }}>
-            <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>⚠️ No Raw Block Predictions Generated Yet</h3>
-            <p style={{ color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <AlertTriangle size={20} color="var(--accent-gold)" />
+              <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>No Raw Block Predictions Generated Yet</h3>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '6px', margin: 0 }}>
               Run <code>python parse_raw_blocks_and_predict.py</code> to extract honest features and populate real KPIs.
             </p>
           </div>
@@ -232,25 +270,34 @@ export default function App() {
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
               <div className="feature-card">
-                <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '8px', fontWeight: 700 }}>
-                  🌐 Network↔Blockchain Fusion
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Share2 size={18} color="var(--accent-gold)" />
+                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
+                    Network↔Blockchain Fusion
+                  </h3>
+                </div>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
                   Fuses on-chain graph suspicion with BGP ASN & /24 subnet peer densities, lifting Test F1 to 0.8041 and filtering 100% of legit exchange bursts.
                 </p>
               </div>
               <div className="feature-card">
-                <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', marginBottom: '8px', fontWeight: 700 }}>
-                  ⚡ Elliptic GNN Classification
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Cpu size={18} color="var(--accent-cyan)" />
+                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
+                    Elliptic GNN Classification
+                  </h3>
+                </div>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
                   Self-Supervised GraphSAGE pretrained on 234k directed edges → Random Forest downstream achieving 0.7905 Test F1 and 0.9219 ROC-AUC.
                 </p>
               </div>
               <div className="feature-card">
-                <h3 style={{ fontSize: '1rem', color: 'var(--accent-purple)', marginBottom: '8px', fontWeight: 700 }}>
-                  🏷️ BABD-13 Multi-Class ML
-                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Tag size={18} color="var(--accent-purple)" />
+                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-purple)', margin: 0, fontWeight: 700 }}>
+                    BABD-13 Multi-Class ML
+                  </h3>
+                </div>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
                   Account-Disjoint Stratified Classifier across 10 clean address categories achieving 96.37% Test Accuracy and reduced 5-feature model for honest raw-block scoring.
                 </p>
@@ -263,15 +310,19 @@ export default function App() {
         {activeTab === 'stream' && (
           <div className="glass-panel">
             <div className="panel-header">
-              <h2>📡 Live Blockchain WebSocket Feed</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Radio size={22} color="var(--accent-cyan)" />
+                <h2>Live Blockchain WebSocket Feed</h2>
+              </div>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Streaming from Raw Blocks (Heuristic Score Proxy with Real-Time Explainability)
               </span>
             </div>
 
             {streamData.length > 0 && streamData[0].stream_note && (
-              <div style={{ background: 'var(--bg-panel-nested)', borderLeft: '3px solid var(--accent-cyan)', padding: '10px 14px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                ℹ️ {streamData[0].stream_note}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-panel-nested)', borderLeft: '3px solid var(--accent-cyan)', padding: '10px 14px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <Info size={16} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+                <span>{streamData[0].stream_note}</span>
               </div>
             )}
 
@@ -322,7 +373,10 @@ export default function App() {
         {activeTab === 'search' && (
           <div className="glass-panel">
             <div className="panel-header">
-              <h2>🔍 Transaction & Address Risk Search Engine</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Search size={22} color="var(--accent-gold)" />
+                <h2>Transaction & Address Risk Search Engine</h2>
+              </div>
             </div>
             <form onSubmit={handleSearch} className="search-box">
               <input
@@ -340,7 +394,7 @@ export default function App() {
               <div style={{ background: 'var(--alert-high-bg)', border: '1px solid var(--alert-high-border)', padding: '16px', borderRadius: '10px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '1.4rem' }}>🔗</span>
+                    <Link2 size={24} color="var(--alert-high)" />
                     <div>
                       <h4 style={{ color: 'var(--alert-high)', margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
                         Co-Spend Entity Detected ({addressClusterInfo.cluster_id})
@@ -382,9 +436,12 @@ export default function App() {
                   searchResult.type === 'address' ? (
                     searchResult.risk_score_status === 'scored' ? (
                       <div>
-                        <h3 style={{ color: 'var(--accent-indigo)', marginBottom: '8px', fontWeight: 700 }}>
-                          🏷️ Bitcoin Address Behavioral Intelligence
-                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <Fingerprint size={20} color="var(--accent-indigo)" />
+                          <h3 style={{ color: 'var(--accent-indigo)', margin: 0, fontWeight: 700 }}>
+                            Bitcoin Address Behavioral Intelligence
+                          </h3>
+                        </div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '14px' }}>
                           Engine: {searchResult.scoring_engine}
                         </p>
@@ -406,9 +463,12 @@ export default function App() {
                         {/* Explainability Block */}
                         {searchResult.explanation && (
                           <div style={{ background: 'var(--bg-card)', borderLeft: '3px solid var(--accent-indigo)', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px', border: '1px solid var(--border-color)', borderLeftWidth: '3px', borderLeftColor: 'var(--accent-indigo)' }}>
-                            <span style={{ color: 'var(--accent-indigo)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              🔍 Why Predicted (SHAP Attribution):
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                              <Sparkles size={15} color="var(--accent-indigo)" />
+                              <span style={{ color: 'var(--accent-indigo)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Why Predicted (SHAP Attribution):
+                              </span>
+                            </div>
                             <p style={{ color: 'var(--text-primary)', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
                               {searchResult.explanation}
                             </p>
@@ -421,9 +481,12 @@ export default function App() {
                       </div>
                     ) : (
                       <div>
-                        <h3 style={{ color: 'var(--accent-cyan)', marginBottom: '8px' }}>
-                          ℹ️ Individual Address ML Score: Not Scored
-                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <Info size={20} color="var(--accent-cyan)" />
+                          <h3 style={{ color: 'var(--accent-cyan)', margin: 0 }}>
+                            Individual Address ML Score: Not Scored
+                          </h3>
+                        </div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.5', margin: 0 }}>
                           {searchResult.message}
                         </p>
@@ -431,9 +494,16 @@ export default function App() {
                     )
                   ) : (
                     <div>
-                      <h3 style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', marginBottom: '8px', fontWeight: 700 }}>
-                        {searchResult.is_high_risk ? '🚨 HIGH HEURISTIC RISK ALERT' : '✓ CLEAN TRANSACTION'}
-                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        {searchResult.is_high_risk ? (
+                          <AlertOctagon size={22} color="var(--alert-critical)" />
+                        ) : (
+                          <CheckCircle2 size={22} color="var(--alert-low)" />
+                        )}
+                        <h3 style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', margin: 0, fontWeight: 700 }}>
+                          {searchResult.is_high_risk ? 'HIGH HEURISTIC RISK ALERT' : 'CLEAN TRANSACTION'}
+                        </h3>
+                      </div>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '12px' }}>
                         Engine: {searchResult.scoring_engine}
                       </p>
@@ -452,9 +522,12 @@ export default function App() {
                           borderRadius: '6px',
                           marginBottom: '16px'
                         }}>
-                          <span style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            🔍 Why Flagged (Heuristic Rule Factors):
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                            <FileSearch size={15} color={searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)'} />
+                            <span style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Why Flagged (Heuristic Rule Factors):
+                            </span>
+                          </div>
                           <p style={{ color: 'var(--text-primary)', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
                             {searchResult.explanation}
                           </p>
@@ -484,7 +557,10 @@ export default function App() {
             {/* Section 1: Cross-Layer Cluster Summary */}
             <div className="glass-panel" style={{ marginBottom: '24px' }}>
               <div className="panel-header">
-                <h2>🌐 Cross-Layer Coordinated Subnet & ASN Clusters</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Network size={22} color="var(--accent-cyan)" />
+                  <h2>Cross-Layer Coordinated Subnet & ASN Clusters</h2>
+                </div>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   Aggregated from BGP Routing Intelligence & Temporal Subnet Density
                 </span>
@@ -492,7 +568,10 @@ export default function App() {
 
               {networkClusters && networkClusters.status === 'not_generated_yet' ? (
                 <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '16px', borderRadius: '6px' }}>
-                  <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>⚠️ Network Correlation Not Generated Yet</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={20} color="var(--accent-gold)" />
+                    <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Network Correlation Not Generated Yet</h3>
+                  </div>
                   <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
                     Please run <code>python train_combined_risk_model.py</code> to generate <code>models/network_correlated_alerts.csv</code>.
                   </p>
@@ -555,7 +634,10 @@ export default function App() {
             {/* Section 2: Top Fused Alerts */}
             <div className="glass-panel">
               <div className="panel-header">
-                <h2>🚨 Ranked Multimodal Fused Risk Alerts</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <ShieldAlert size={22} color="var(--alert-critical)" />
+                  <h2>Ranked Multimodal Fused Risk Alerts</h2>
+                </div>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   Fusing Blockchain Graph ML + BGP Network Telemetry (Click TXID to inspect SHAP explanation)
                 </span>
@@ -563,7 +645,10 @@ export default function App() {
 
               {networkAlerts && networkAlerts.status === 'not_generated_yet' ? (
                 <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '16px', borderRadius: '6px' }}>
-                  <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>⚠️ Fused Alerts Not Generated Yet</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={20} color="var(--accent-gold)" />
+                    <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Fused Alerts Not Generated Yet</h3>
+                  </div>
                   <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
                     Please run <code>python train_combined_risk_model.py</code> to execute multimodal fusion and generate alerts.
                   </p>
@@ -616,12 +701,16 @@ export default function App() {
                             <td>{(al.blockchain_risk_score * 100).toFixed(1)}%</td>
                             <td>
                               <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
                                 background: al.is_correlated_cluster ? 'var(--alert-critical-bg)' : 'var(--bg-panel-nested)',
                                 color: al.is_correlated_cluster ? 'var(--alert-critical)' : 'var(--text-secondary)',
                                 border: `1px solid ${al.is_correlated_cluster ? 'var(--alert-critical-border)' : 'var(--border-color)'}`,
                                 padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold'
                               }}>
-                                {al.is_correlated_cluster ? '⚡ CORRELATED' : 'STANDARD'}
+                                {al.is_correlated_cluster && <Zap size={12} />}
+                                {al.is_correlated_cluster ? 'CORRELATED' : 'STANDARD'}
                               </span>
                             </td>
                             <td><strong>{(al.fused_prob * 100).toFixed(1)}%</strong></td>
@@ -634,8 +723,10 @@ export default function App() {
                               <button
                                 onClick={() => toggleNetworkTxExpand(al.txid)}
                                 className="btn-action"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                               >
-                                {expandedNetworkTxid === al.txid ? 'Collapse ▲' : 'Explain ▼'}
+                                <span>{expandedNetworkTxid === al.txid ? 'Collapse' : 'Explain'}</span>
+                                {expandedNetworkTxid === al.txid ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
                             </td>
                           </tr>
@@ -647,9 +738,12 @@ export default function App() {
                                 {networkTxDetail[al.txid] ? (
                                   <div>
                                     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeftWidth: '4px', borderLeftColor: 'var(--accent-indigo)', padding: '12px 16px', borderRadius: '6px', marginBottom: '14px' }}>
-                                      <span style={{ color: 'var(--accent-indigo)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                        🔍 Forensic Decision Attribution ({networkTxDetail[al.txid].scoring_engine}):
-                                      </span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                        <FileSearch size={15} color="var(--accent-indigo)" />
+                                        <span style={{ color: 'var(--accent-indigo)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                          Forensic Decision Attribution ({networkTxDetail[al.txid].scoring_engine}):
+                                        </span>
+                                      </div>
                                       <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', margin: '6px 0 0 0', lineHeight: '1.4' }}>
                                         {networkTxDetail[al.txid].explanation}
                                       </p>
@@ -721,7 +815,10 @@ export default function App() {
         {activeTab === 'clusters' && (
           <div className="glass-panel">
             <div className="panel-header">
-              <h2>🔗 Multi-Input Co-Spend Wallet Entity Clusters</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Layers size={22} color="var(--accent-cyan)" />
+                <h2>Multi-Input Co-Spend Wallet Entity Clusters</h2>
+              </div>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Union-Find Clustering on Raw Block Common-Input Heuristic
               </span>
@@ -729,7 +826,10 @@ export default function App() {
 
             {walletClusters && walletClusters.status === 'not_generated_yet' ? (
               <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '16px', borderRadius: '6px' }}>
-                <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>⚠️ Wallet Clusters Not Generated Yet</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} color="var(--accent-gold)" />
+                  <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Wallet Clusters Not Generated Yet</h3>
+                </div>
                 <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
                   Please run <code>python bitcoin_heuristics.py</code> to execute Union-Find co-spend analysis and generate <code>models/wallet_clusters.csv</code>.
                 </p>
@@ -777,8 +877,10 @@ export default function App() {
                             <button
                               onClick={() => toggleClusterExpand(c.cluster_id)}
                               className="btn-action"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                             >
-                              {expandedClusterId === c.cluster_id ? 'Collapse ▲' : 'Expand Addresses ▼'}
+                              <span>{expandedClusterId === c.cluster_id ? 'Collapse' : 'Expand Addresses'}</span>
+                              {expandedClusterId === c.cluster_id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </button>
                           </td>
                         </tr>
@@ -813,11 +915,19 @@ export default function App() {
         {activeTab === 'reports' && (
           <div className="glass-panel">
             <div className="panel-header">
-              <h2>📈 Model Evaluation & Benchmarks</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <BarChart3 size={22} color="var(--accent-gold)" />
+                <h2>Model Evaluation & Benchmarks</h2>
+              </div>
             </div>
             {benchmarks ? (
               <div>
-                <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '12px', fontWeight: 700 }}>Elliptic Benchmark Results</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Database size={18} color="var(--accent-gold)" />
+                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
+                    Elliptic Benchmark Results
+                  </h3>
+                </div>
                 <table className="stream-table" style={{ marginBottom: '24px' }}>
                   <thead>
                     <tr><th>Model</th><th>Split</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>ROC-AUC</th><th>PR-AUC</th></tr>
@@ -833,7 +943,12 @@ export default function App() {
                   </tbody>
                 </table>
 
-                <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', marginBottom: '12px', fontWeight: 700 }}>BABD-13 Benchmark Results</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Sliders size={18} color="var(--accent-cyan)" />
+                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
+                    BABD-13 Benchmark Results
+                  </h3>
+                </div>
                 <table className="stream-table">
                   <thead>
                     <tr><th>Model</th><th>Split</th><th>Accuracy</th><th>Macro F1</th><th>Weighted F1</th><th>Macro Precision</th><th>Macro Recall</th></tr>
