@@ -25,7 +25,8 @@ import {
   Database,
   Sliders,
   TrendingUp,
-  PieChart as PieIcon
+  PieChart as PieIcon,
+  Filter
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -81,6 +82,32 @@ const formatBtcVolume = (val) => {
   return Number(val).toFixed(2) + ' BTC';
 };
 
+// Reusable Segmented Pill Selector (Top 10 | Top 25 | All)
+function PillSelector({ options = [10, 25, 'all'], value, onChange, label = 'Show:' }) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+      {label && <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>}
+      <div className="filter-pills">
+        {options.map((opt) => {
+          const val = opt === 'all' ? 99999 : Number(opt);
+          const isSelected = value === val || (opt === 'all' && value >= 99999);
+          const displayText = opt === 'all' ? 'All' : `Top ${opt}`;
+          return (
+            <button
+              key={String(opt)}
+              className={`pill-btn ${isSelected ? 'active' : ''}`}
+              onClick={() => onChange(val)}
+              type="button"
+            >
+              {displayText}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Dark Glassmorphic Custom Tooltip Component
 const DarkChartTooltip = ({ active, payload, label, valuePrefix = '', valueSuffix = '', formatter }) => {
   if (active && payload && payload.length) {
@@ -130,11 +157,11 @@ function FactorBarChart({ factors, chartColors }) {
   });
 
   return (
-    <div style={{ marginTop: '16px', marginBottom: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px 16px' }}>
-      <div style={{ fontSize: '0.78rem', color: chartColors.textSecondary, fontWeight: 700, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+    <div style={{ marginTop: '14px', marginBottom: '14px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px 14px' }}>
+      <div style={{ fontSize: '0.76rem', color: chartColors.textSecondary, fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         📊 Decision Factor Attribution Delta (SHAP / Heuristic Impact)
       </div>
-      <div style={{ width: '100%', height: Math.max(160, data.length * 38) }}>
+      <div style={{ width: '100%', height: Math.max(140, data.length * 36) }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"
@@ -151,7 +178,7 @@ function FactorBarChart({ factors, chartColors }) {
             <YAxis
               type="category"
               dataKey="label"
-              width={160}
+              width={150}
               tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
               axisLine={{ stroke: chartColors.borderColor }}
               tickLine={false}
@@ -212,6 +239,13 @@ export default function App() {
   const [networkClusters, setNetworkClusters] = useState(null);
   const [expandedNetworkTxid, setExpandedNetworkTxid] = useState(null);
   const [networkTxDetail, setNetworkTxDetail] = useState({});
+
+  // Classification & Top Filter Limits (Top 10 | Top 25 | All)
+  const [streamLimit, setStreamLimit] = useState(25);
+  const [subnetLimit, setSubnetLimit] = useState(10);
+  const [networkAlertsLimit, setNetworkAlertsLimit] = useState(10);
+  const [clustersLimit, setClustersLimit] = useState(10);
+  const [benchmarksLimit, setBenchmarksLimit] = useState(99999);
 
   // Memoized Chart Colors read dynamically from CSS Variables
   const [chartColors, setChartColors] = useState(DEFAULT_CHART_COLORS);
@@ -353,33 +387,33 @@ export default function App() {
       <div className="sidebar">
         <div className="brand">
           <div className="brand-icon">
-            <ShieldAlert size={20} color="var(--accent-gold)" />
+            <ShieldAlert size={18} color="var(--accent-gold)" />
           </div>
           <span>BitSentinel-AI</span>
         </div>
         <div className="nav-menu">
           <button className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-            <LayoutDashboard size={18} />
+            <LayoutDashboard size={17} />
             <span>Dashboard KPIs</span>
           </button>
           <button className={`nav-item ${activeTab === 'stream' ? 'active' : ''}`} onClick={() => setActiveTab('stream')}>
-            <Radio size={18} />
+            <Radio size={17} />
             <span>Live WebSocket Ticker</span>
           </button>
           <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
-            <Search size={18} />
+            <Search size={17} />
             <span>Tx & Address Search</span>
           </button>
           <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
-            <Network size={18} />
+            <Network size={17} />
             <span>Network Correlation</span>
           </button>
           <button className={`nav-item ${activeTab === 'clusters' ? 'active' : ''}`} onClick={() => setActiveTab('clusters')}>
-            <Layers size={18} />
+            <Layers size={17} />
             <span>Wallet Clusters</span>
           </button>
           <button className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
-            <BarChart3 size={18} />
+            <BarChart3 size={17} />
             <span>Model Benchmarks</span>
           </button>
         </div>
@@ -395,19 +429,19 @@ export default function App() {
           </div>
           <div className="status-badge">
             <div className="status-dot" style={{ background: wsConnected ? 'var(--alert-low)' : 'var(--alert-critical)' }}></div>
-            <Activity size={14} style={{ marginLeft: '2px' }} />
+            <Activity size={13} style={{ marginLeft: '2px' }} />
             <span>{wsConnected ? 'WebSocket Live Feed Active' : 'REST Mode Active'}</span>
           </div>
         </div>
 
-        {/* Top KPI Cards */}
+        {/* Top KPI Cards (Compact) */}
         {kpis && kpis.status === 'no_predictions_yet' ? (
-          <div className="glass-panel" style={{ marginBottom: '24px', borderLeft: '4px solid var(--accent-gold)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <AlertTriangle size={20} color="var(--accent-gold)" />
-              <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>No Raw Block Predictions Generated Yet</h3>
+          <div className="glass-panel" style={{ marginBottom: '18px', borderLeft: '4px solid var(--accent-gold)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={18} color="var(--accent-gold)" />
+              <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '0.95rem' }}>No Raw Block Predictions Generated Yet</h3>
             </div>
-            <p style={{ color: 'var(--text-secondary)', marginTop: '6px', margin: 0 }}>
+            <p style={{ color: 'var(--text-secondary)', marginTop: '4px', margin: 0, fontSize: '0.85rem' }}>
               Run <code>python src/parse_raw_blocks_and_predict.py</code> to extract honest features and populate real KPIs.
             </p>
           </div>
@@ -456,63 +490,63 @@ export default function App() {
             <div className="panel-header">
               <h2>Executive Fraud Risk & Intelligence Summary</h2>
             </div>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.5' }}>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.45', fontSize: '0.88rem' }}>
               Real-time cross-layer monitoring across raw blocks (600000–605999), 203,769 Elliptic graph transactions, 46k+ network telemetry records, and 798,934 BABD-13 Bitcoin addresses.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
               <div className="feature-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <Share2 size={18} color="var(--accent-gold)" />
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Share2 size={16} color="var(--accent-gold)" />
+                  <h3 style={{ fontSize: '0.92rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
                     Network↔Blockchain Fusion
                   </h3>
                 </div>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                   Fuses on-chain graph suspicion with BGP ASN & /24 subnet peer densities, lifting Test F1 to 0.8041 and filtering 100% of legit exchange bursts.
                 </p>
               </div>
               <div className="feature-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <Cpu size={18} color="var(--accent-cyan)" />
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Cpu size={16} color="var(--accent-cyan)" />
+                  <h3 style={{ fontSize: '0.92rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
                     Elliptic GNN Classification
                   </h3>
                 </div>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                   Self-Supervised GraphSAGE pretrained on 234k directed edges → Random Forest downstream achieving 0.7905 Test F1 and 0.9219 ROC-AUC.
                 </p>
               </div>
               <div className="feature-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <Tag size={18} color="var(--accent-purple)" />
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-purple)', margin: 0, fontWeight: 700 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Tag size={16} color="var(--accent-purple)" />
+                  <h3 style={{ fontSize: '0.92rem', color: 'var(--accent-purple)', margin: 0, fontWeight: 700 }}>
                     BABD-13 Multi-Class ML
                   </h3>
                 </div>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                   Account-Disjoint Stratified Classifier across 10 clean address categories achieving 96.37% Test Accuracy and reduced 5-feature model for honest raw-block scoring.
                 </p>
               </div>
             </div>
 
-            {/* Task 3: Polished Risk Composition Donut & Volume Comparison */}
+            {/* Risk Composition Donut & Volume Comparison Charts */}
             {kpis && kpis.status !== 'no_predictions_yet' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
                 {/* Donut Chart: Risk Composition */}
                 <div className="feature-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <PieIcon size={18} color="var(--accent-gold)" />
-                      <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                      <PieIcon size={16} color="var(--accent-gold)" />
+                      <h3 style={{ fontSize: '0.9rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
                         Transaction Risk Composition
                       </h3>
                     </div>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--accent-gold)', fontWeight: 600 }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', fontWeight: 600 }}>
                       {highRiskPct}% Alert Rate
                     </span>
                   </div>
 
-                  <div style={{ width: '100%', height: 210, position: 'relative' }}>
+                  <div style={{ width: '100%', height: 180, position: 'relative' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -522,9 +556,9 @@ export default function App() {
                           ]}
                           cx="50%"
                           cy="50%"
-                          innerRadius={58}
-                          outerRadius={80}
-                          minAngle={14} // Ensures minority slice (0.16%) is clearly visible and clickable
+                          innerRadius={50}
+                          outerRadius={72}
+                          minAngle={14}
                           dataKey="value"
                           stroke="rgba(10, 13, 20, 0.8)"
                           strokeWidth={2}
@@ -567,55 +601,55 @@ export default function App() {
                       textAlign: 'center',
                       pointerEvents: 'none'
                     }}>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-heading)', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-heading)', fontFamily: 'var(--font-mono)' }}>
                         {formatCompactNumber(totalScored)}
                       </div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Total Txs
                       </div>
                     </div>
                   </div>
 
                   {/* Summary Legend Breakdown */}
-                  <div style={{ display: 'flex', justifyContent: 'space-around', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginTop: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: chartColors.low }}></span>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: chartColors.low }}></span>
                       <span style={{ color: 'var(--text-secondary)' }}>Normal: <strong>{normalPct}%</strong> ({formatCompactNumber(normalCount)})</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: chartColors.critical }}></span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: chartColors.critical }}></span>
                       <span style={{ color: 'var(--text-secondary)' }}>High-Risk: <strong style={{ color: chartColors.critical }}>{highRiskPct}%</strong> ({Number(highRiskCount).toLocaleString()})</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Bar Chart: Monitored vs Flagged Volume with Clean Scale */}
+                {/* Bar Chart: Monitored vs Flagged Volume */}
                 <div className="feature-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <TrendingUp size={18} color="var(--accent-cyan)" />
-                      <h3 style={{ fontSize: '0.95rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
+                      <TrendingUp size={16} color="var(--accent-cyan)" />
+                      <h3 style={{ fontSize: '0.9rem', color: 'var(--text-heading)', margin: 0, fontWeight: 700 }}>
                         Monitored vs Flagged BTC Volume
                       </h3>
                     </div>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       Total: {formatBtcVolume(kpis.total_monitored_btc_volume)}
                     </span>
                   </div>
 
-                  <div style={{ width: '100%', height: 210 }}>
+                  <div style={{ width: '100%', height: 180 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={[
                           { name: 'Total Monitored', volume: kpis.total_monitored_btc_volume || 0, formatted: formatBtcVolume(kpis.total_monitored_btc_volume), fill: chartColors.cyan },
                           { name: 'Flagged High-Risk', volume: kpis.flagged_high_risk_btc_volume || 0, formatted: formatBtcVolume(kpis.flagged_high_risk_btc_volume), fill: chartColors.gold }
                         ]}
-                        margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
+                        margin={{ top: 10, right: 15, left: 5, bottom: 0 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
                         <XAxis dataKey="name" tick={{ fill: chartColors.textSecondary, fontSize: 11 }} axisLine={{ stroke: chartColors.borderColor }} />
                         <YAxis
-                          width={70}
+                          width={60}
                           tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }}
                           axisLine={{ stroke: chartColors.borderColor }}
                           tickFormatter={(v) => v >= 1e6 ? `${(v/1e6).toFixed(0)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}k` : `${v}`}
@@ -652,7 +686,7 @@ export default function App() {
                   </div>
 
                   {/* Volume Metric Highlights */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginTop: '4px', fontSize: '0.78rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', marginTop: '4px', fontSize: '0.75rem' }}>
                     <span style={{ color: 'var(--text-secondary)' }}>Monitored: <strong style={{ color: chartColors.cyan }}>{formatBtcVolume(kpis.total_monitored_btc_volume)}</strong></span>
                     <span style={{ color: 'var(--text-secondary)' }}>Flagged: <strong style={{ color: chartColors.gold }}>{formatBtcVolume(kpis.flagged_high_risk_btc_volume)}</strong></span>
                   </div>
@@ -667,51 +701,56 @@ export default function App() {
           <div className="glass-panel">
             <div className="panel-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Radio size={22} color="var(--accent-cyan)" />
+                <Radio size={20} color="var(--accent-cyan)" />
                 <h2>Live Blockchain WebSocket Feed</h2>
               </div>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Streaming from Raw Blocks (Heuristic Score Proxy with Real-Time Explainability)
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <PillSelector
+                  options={[10, 25, 'all']}
+                  value={streamLimit}
+                  onChange={setStreamLimit}
+                  label="Display Limit:"
+                />
+              </div>
             </div>
 
             {streamData.length > 0 && streamData[0].stream_note && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-panel-nested)', borderLeft: '3px solid var(--accent-cyan)', padding: '10px 14px', borderRadius: '6px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                <Info size={16} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-panel-nested)', borderLeft: '3px solid var(--accent-cyan)', padding: '8px 12px', borderRadius: '6px', marginBottom: '14px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                <Info size={15} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
                 <span>{streamData[0].stream_note}</span>
               </div>
             )}
 
-            {/* Task 4: Rolling Risk Line Chart for Last 30 Transactions */}
+            {/* Rolling Risk Line Chart for Filtered Window */}
             {streamData.length > 0 && (
-              <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <TrendingUp size={16} color="var(--accent-cyan)" />
-                    <span style={{ fontSize: '0.82rem', color: 'var(--text-heading)', fontWeight: 700 }}>
-                      Live Heuristic Risk Trajectory (Last {Math.min(30, streamData.length)} Transactions)
+                    <TrendingUp size={15} color="var(--accent-cyan)" />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-heading)', fontWeight: 700 }}>
+                      Live Heuristic Risk Trajectory (Last {Math.min(streamLimit, streamData.length)} Txs)
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Red Dots indicate High-Risk Threshold Exceeded (≥ 0.70)
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Red Dots: High-Risk Threshold (≥ 0.70)
                   </span>
                 </div>
-                <div style={{ width: '100%', height: 220 }}>
+                <div style={{ width: '100%', height: 180 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={streamData.slice(0, 30).reverse().map((tx, idx) => ({
+                      data={streamData.slice(0, streamLimit).reverse().map((tx, idx) => ({
                         idx: `#${idx + 1}`,
                         txHash: tx.tx_hash ? tx.tx_hash.slice(0, 8) + '...' : `tx-${idx}`,
                         score: parseFloat(tx.heuristic_score ?? tx.fraud_score ?? 0),
                         isAlert: Boolean(tx.is_alert || (tx.heuristic_score ?? tx.fraud_score) >= 0.70),
                         valueBtc: tx.value_btc
                       }))}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
+                      margin={{ top: 10, right: 25, left: -10, bottom: 0 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
-                      <XAxis dataKey="idx" tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} />
-                      <YAxis domain={[0, 1.0]} tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} />
-                      <ReferenceLine y={0.70} stroke={chartColors.high} strokeDasharray="3 3" label={{ value: 'Alert Threshold (0.70)', fill: chartColors.high, fontSize: 11, position: 'insideTopRight' }} />
+                      <XAxis dataKey="idx" tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} />
+                      <YAxis domain={[0, 1.0]} tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }} axisLine={{ stroke: chartColors.borderColor }} />
+                      <ReferenceLine y={0.70} stroke={chartColors.high} strokeDasharray="3 3" label={{ value: '0.70 Alert Threshold', fill: chartColors.high, fontSize: 10, position: 'insideTopRight' }} />
                       <Tooltip
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
@@ -739,7 +778,7 @@ export default function App() {
                       <Line
                         type="monotone"
                         dataKey="score"
-                        name="Heuristic Risk Score"
+                        name="Heuristic Score"
                         stroke={chartColors.cyan}
                         strokeWidth={2}
                         dot={(dotProps) => {
@@ -750,14 +789,14 @@ export default function App() {
                               key={key}
                               cx={cx}
                               cy={cy}
-                              r={isHigh ? 5 : 3}
+                              r={isHigh ? 4.5 : 2.5}
                               fill={isHigh ? chartColors.critical : chartColors.cyan}
                               stroke={isHigh ? '#ffffff' : 'none'}
                               strokeWidth={isHigh ? 1.5 : 0}
                             />
                           );
                         }}
-                        activeDot={{ r: 6 }}
+                        activeDot={{ r: 5 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -765,46 +804,49 @@ export default function App() {
               </div>
             )}
 
-            <table className="stream-table">
-              <thead>
-                <tr>
-                  <th>Block</th>
-                  <th>Transaction Hash</th>
-                  <th>Value (BTC)</th>
-                  <th>Inputs/Outputs</th>
-                  <th>Heuristic Score</th>
-                  <th>Risk Reason / Explainability</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {streamData.length === 0 ? (
+            {/* Contained Scrollable Table with Sticky Header */}
+            <div className="table-scroll-container">
+              <table className="stream-table">
+                <thead>
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)' }}>
-                      Connecting to Live Fraud WebSocket Stream ...
-                    </td>
+                    <th>Block</th>
+                    <th>Transaction Hash</th>
+                    <th>Value (BTC)</th>
+                    <th>Inputs/Outputs</th>
+                    <th>Heuristic Score</th>
+                    <th>Risk Reason / Explainability</th>
+                    <th>Status</th>
                   </tr>
-                ) : (
-                  streamData.map((tx, idx) => (
-                    <tr key={idx} className={tx.is_alert ? 'alert-row' : ''}>
-                      <td>#{tx.block_height}</td>
-                      <td>{tx.tx_hash ? tx.tx_hash.slice(0, 20) + '...' : 'N/A'}</td>
-                      <td>{tx.value_btc} BTC</td>
-                      <td>{tx.inputs_count} In / {tx.outputs_count} Out</td>
-                      <td><strong>{tx.heuristic_score ?? tx.fraud_score}</strong></td>
-                      <td style={{ fontSize: '0.82rem', color: tx.is_alert ? 'var(--alert-high)' : 'var(--text-secondary)', maxWidth: '340px' }}>
-                        {tx.explanation ? tx.explanation.replace('Rule-Based Heuristic Evaluation: ', '') : 'Normal transfer bounds'}
-                      </td>
-                      <td>
-                        <span className={`alert-tag ${tx.is_alert ? 'high' : 'normal'}`}>
-                          {tx.is_alert ? 'HIGH RISK' : 'NORMAL'}
-                        </span>
+                </thead>
+                <tbody>
+                  {streamData.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                        Connecting to Live Fraud WebSocket Stream ...
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    streamData.slice(0, streamLimit).map((tx, idx) => (
+                      <tr key={idx} className={tx.is_alert ? 'alert-row' : ''}>
+                        <td>#{tx.block_height}</td>
+                        <td>{tx.tx_hash ? tx.tx_hash.slice(0, 20) + '...' : 'N/A'}</td>
+                        <td>{tx.value_btc} BTC</td>
+                        <td>{tx.inputs_count} In / {tx.outputs_count} Out</td>
+                        <td><strong>{tx.heuristic_score ?? tx.fraud_score}</strong></td>
+                        <td style={{ fontSize: '0.8rem', color: tx.is_alert ? 'var(--alert-high)' : 'var(--text-secondary)', maxWidth: '340px' }}>
+                          {tx.explanation ? tx.explanation.replace('Rule-Based Heuristic Evaluation: ', '') : 'Normal transfer bounds'}
+                        </td>
+                        <td>
+                          <span className={`alert-tag ${tx.is_alert ? 'high' : 'normal'}`}>
+                            {tx.is_alert ? 'HIGH RISK' : 'NORMAL'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -813,7 +855,7 @@ export default function App() {
           <div className="glass-panel">
             <div className="panel-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Search size={22} color="var(--accent-gold)" />
+                <Search size={20} color="var(--accent-gold)" />
                 <h2>Transaction & Address Risk Search Engine</h2>
               </div>
             </div>
@@ -830,15 +872,15 @@ export default function App() {
 
             {/* Address Co-Spend Cluster Alert Badge */}
             {addressClusterInfo && addressClusterInfo.found && (
-              <div style={{ background: 'var(--alert-high-bg)', border: '1px solid var(--alert-high-border)', padding: '16px', borderRadius: '10px', marginBottom: '20px' }}>
+              <div style={{ background: 'var(--alert-high-bg)', border: '1px solid var(--alert-high-border)', padding: '14px', borderRadius: '10px', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Link2 size={24} color="var(--alert-high)" />
+                    <Link2 size={22} color="var(--alert-high)" />
                     <div>
-                      <h4 style={{ color: 'var(--alert-high)', margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
+                      <h4 style={{ color: 'var(--alert-high)', margin: 0, fontSize: '0.92rem', fontWeight: 700 }}>
                         Co-Spend Entity Detected ({addressClusterInfo.cluster_id})
                       </h4>
-                      <p style={{ color: 'var(--text-secondary)', margin: '2px 0 0 0', fontSize: '0.85rem' }}>
+                      <p style={{ color: 'var(--text-secondary)', margin: '2px 0 0 0', fontSize: '0.82rem' }}>
                         This address belongs to a <strong>{addressClusterInfo.size}-address</strong> co-spent wallet entity.
                       </p>
                     </div>
@@ -853,14 +895,14 @@ export default function App() {
                 </div>
 
                 {expandedClusterId === addressClusterInfo.cluster_id && (
-                  <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--alert-high-border)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--alert-high-border)' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
                       Associated Entity Addresses:
                     </span>
-                    <div style={{ maxHeight: '160px', overflowY: 'auto', marginTop: '8px', background: 'var(--bg-code)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ maxHeight: '140px', overflowY: 'auto', marginTop: '6px', background: 'var(--bg-code)', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                       {addressClusterInfo.addresses.map((addr, aIdx) => (
-                        <div key={aIdx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: addr === addressClusterInfo.address ? 'var(--accent-indigo)' : 'var(--text-primary)', padding: '3px 0' }}>
-                          {addr} {addr === addressClusterInfo.address && <span style={{ color: 'var(--alert-high)', fontSize: '0.75rem', fontWeight: 700 }}>(Searched Address)</span>}
+                        <div key={aIdx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: addr === addressClusterInfo.address ? 'var(--accent-indigo)' : 'var(--text-primary)', padding: '2px 0' }}>
+                          {addr} {addr === addressClusterInfo.address && <span style={{ color: 'var(--alert-high)', fontSize: '0.72rem', fontWeight: 700 }}>(Searched Address)</span>}
                         </div>
                       ))}
                     </div>
@@ -870,30 +912,30 @@ export default function App() {
             )}
 
             {searchResult && (
-              <div style={{ background: 'var(--bg-panel-nested)', padding: '22px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+              <div style={{ background: 'var(--bg-panel-nested)', padding: '18px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
                 {searchResult.found ? (
                   searchResult.type === 'address' ? (
                     searchResult.risk_score_status === 'scored' ? (
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <Fingerprint size={20} color="var(--accent-indigo)" />
-                          <h3 style={{ color: 'var(--accent-indigo)', margin: 0, fontWeight: 700 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <Fingerprint size={18} color="var(--accent-indigo)" />
+                          <h3 style={{ color: 'var(--accent-indigo)', margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
                             Bitcoin Address Behavioral Intelligence
                           </h3>
                         </div>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '14px' }}>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '12px' }}>
                           Engine: {searchResult.scoring_engine}
                         </p>
-                        <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '20px', marginBottom: '14px', flexWrap: 'wrap' }}>
                           <div>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>Predicted Category:</span>
-                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600 }}>Predicted Category:</span>
+                            <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
                               {searchResult.predicted_category}
                             </div>
                           </div>
                           <div>
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>Model Confidence:</span>
-                            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--alert-low)' }}>
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600 }}>Model Confidence:</span>
+                            <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--alert-low)' }}>
                               {(searchResult.model_confidence * 100).toFixed(1)}%
                             </div>
                           </div>
@@ -901,20 +943,20 @@ export default function App() {
 
                         {/* Explainability Block */}
                         {searchResult.explanation && (
-                          <div style={{ background: 'var(--bg-card)', borderLeft: '3px solid var(--accent-indigo)', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px', border: '1px solid var(--border-color)', borderLeftWidth: '3px', borderLeftColor: 'var(--accent-indigo)' }}>
+                          <div style={{ background: 'var(--bg-card)', borderLeft: '3px solid var(--accent-indigo)', padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', border: '1px solid var(--border-color)', borderLeftWidth: '3px', borderLeftColor: 'var(--accent-indigo)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                              <Sparkles size={15} color="var(--accent-indigo)" />
-                              <span style={{ color: 'var(--accent-indigo)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              <Sparkles size={14} color="var(--accent-indigo)" />
+                              <span style={{ color: 'var(--accent-indigo)', fontSize: '0.72rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                 Why Predicted (SHAP Attribution):
                               </span>
                             </div>
-                            <p style={{ color: 'var(--text-primary)', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                            <p style={{ color: 'var(--text-primary)', fontSize: '0.85rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
                               {searchResult.explanation}
                             </p>
                           </div>
                         )}
 
-                        {/* Task 6: Factor Bar Chart for Address Search */}
+                        {/* Factor Bar Chart for Address Search */}
                         <FactorBarChart factors={searchResult.top_factors} chartColors={chartColors} />
 
                         <pre className="code-box">
@@ -923,33 +965,33 @@ export default function App() {
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <Info size={20} color="var(--accent-cyan)" />
-                          <h3 style={{ color: 'var(--accent-cyan)', margin: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <Info size={18} color="var(--accent-cyan)" />
+                          <h3 style={{ color: 'var(--accent-cyan)', margin: 0, fontSize: '0.95rem' }}>
                             Individual Address ML Score: Not Scored
                           </h3>
                         </div>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.5', margin: 0 }}>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.45', margin: 0 }}>
                           {searchResult.message}
                         </p>
                       </div>
                     )
                   ) : (
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                         {searchResult.is_high_risk ? (
-                          <AlertOctagon size={22} color="var(--alert-critical)" />
+                          <AlertOctagon size={20} color="var(--alert-critical)" />
                         ) : (
-                          <CheckCircle2 size={22} color="var(--alert-low)" />
+                          <CheckCircle2 size={20} color="var(--alert-low)" />
                         )}
-                        <h3 style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', margin: 0, fontWeight: 700 }}>
+                        <h3 style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
                           {searchResult.is_high_risk ? 'HIGH HEURISTIC RISK ALERT' : 'CLEAN TRANSACTION'}
                         </h3>
                       </div>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '12px' }}>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '10px' }}>
                         Engine: {searchResult.scoring_engine}
                       </p>
-                      <p style={{ fontFamily: 'var(--font-mono)', marginBottom: '12px' }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', marginBottom: '10px', fontSize: '0.85rem' }}>
                         Heuristic Score: <strong>{searchResult.heuristic_score}</strong>
                       </p>
 
@@ -960,23 +1002,23 @@ export default function App() {
                           border: `1px solid ${searchResult.is_high_risk ? 'var(--alert-critical-border)' : 'var(--alert-low-border)'}`,
                           borderLeftWidth: '4px',
                           borderLeftColor: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)',
-                          padding: '12px 16px',
+                          padding: '10px 14px',
                           borderRadius: '6px',
-                          marginBottom: '16px'
+                          marginBottom: '14px'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                            <FileSearch size={15} color={searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)'} />
-                            <span style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            <FileSearch size={14} color={searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)'} />
+                            <span style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', fontSize: '0.72rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                               Why Flagged (Heuristic Rule Factors):
                             </span>
                           </div>
-                          <p style={{ color: 'var(--text-primary)', fontSize: '0.88rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                          <p style={{ color: 'var(--text-primary)', fontSize: '0.85rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
                             {searchResult.explanation}
                           </p>
                         </div>
                       )}
 
-                      {/* Task 6: Factor Bar Chart for Transaction Search */}
+                      {/* Factor Bar Chart for Transaction Search */}
                       <FactorBarChart factors={searchResult.top_factors} chartColors={chartColors} />
 
                       <pre className="code-box">
@@ -1000,59 +1042,53 @@ export default function App() {
         {activeTab === 'network' && (
           <div>
             {/* Section 1: Cross-Layer Cluster Summary */}
-            <div className="glass-panel" style={{ marginBottom: '24px' }}>
+            <div className="glass-panel" style={{ marginBottom: '18px' }}>
               <div className="panel-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Network size={22} color="var(--accent-cyan)" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Network size={20} color="var(--accent-cyan)" />
                   <h2>Cross-Layer Coordinated Subnet & ASN Clusters</h2>
                 </div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Aggregated from BGP Routing Intelligence & Temporal Subnet Density
-                </span>
+                <PillSelector
+                  options={[10, 25, 'all']}
+                  value={subnetLimit}
+                  onChange={setSubnetLimit}
+                  label="Subnets:"
+                />
               </div>
 
               {networkClusters && networkClusters.status === 'not_generated_yet' ? (
-                <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '16px', borderRadius: '6px' }}>
+                <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '14px', borderRadius: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={20} color="var(--accent-gold)" />
-                    <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Network Correlation Not Generated Yet</h3>
+                    <AlertTriangle size={18} color="var(--accent-gold)" />
+                    <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '0.92rem' }}>Network Correlation Not Generated Yet</h3>
                   </div>
-                  <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
+                  <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0 0', fontSize: '0.85rem' }}>
                     Please run <code>python src/train_combined_risk_model.py</code> to generate <code>models/network_correlated_alerts.csv</code>.
                   </p>
                 </div>
               ) : networkClusters && networkClusters.clusters ? (
                 <div>
-                  <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
-                    <div style={{ background: 'var(--bg-panel-nested)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>Coordinated Subnets Flagged:</span>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>
-                        {networkClusters.total_clusters}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Task 5: Horizontal Bar Chart of Top 10 Subnets by Max Fused Risk */}
+                  {/* Dynamic Top N Subnets Horizontal Bar Chart */}
                   {networkClusters.clusters.length > 0 && (
-                    <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <TrendingUp size={16} color="var(--accent-cyan)" />
-                          <span style={{ fontSize: '0.82rem', color: 'var(--text-heading)', fontWeight: 700 }}>
-                            Top 10 Coordinated Subnets by Peak Fused Risk
+                    <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px 14px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <TrendingUp size={15} color="var(--accent-cyan)" />
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-heading)', fontWeight: 700 }}>
+                            {subnetLimit >= 99999 ? 'All' : `Top ${subnetLimit}`} Coordinated Subnets Ranked by Peak Risk
                           </span>
                         </div>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          Color Coded by Risk Tier (Critical ≥85%, High ≥70%, Med ≥50%, Low &lt;50%)
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          Critical ≥85%, High ≥70%, Med ≥50%, Low &lt;50%
                         </span>
                       </div>
-                      <div style={{ width: '100%', height: 260 }}>
+                      <div style={{ width: '100%', height: Math.min(260, Math.max(160, Math.min(subnetLimit, networkClusters.clusters.length) * 26)) }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             layout="vertical"
                             data={[...networkClusters.clusters]
                               .sort((a, b) => (b.max_fused_prob || 0) - (a.max_fused_prob || 0))
-                              .slice(0, 10)
+                              .slice(0, subnetLimit)
                               .map(cl => {
                                 const prob = cl.max_fused_prob || 0;
                                 let fill = chartColors.low;
@@ -1069,21 +1105,21 @@ export default function App() {
                                   fill
                                 };
                               })}
-                            margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                            margin={{ top: 5, right: 25, left: 10, bottom: 5 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" horizontal={false} />
                             <XAxis
                               type="number"
                               domain={[0, 1.0]}
                               tickFormatter={(v) => `${Math.round(v * 100)}%`}
-                              tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                              tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }}
                               axisLine={{ stroke: chartColors.borderColor }}
                             />
                             <YAxis
                               type="category"
                               dataKey="subnet"
-                              width={110}
-                              tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                              width={100}
+                              tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }}
                               axisLine={{ stroke: chartColors.borderColor }}
                             />
                             <Tooltip
@@ -1114,7 +1150,7 @@ export default function App() {
                             <Bar dataKey="max_fused_prob" name="Peak Fused Risk" radius={[0, 4, 4, 0]}>
                               {[...networkClusters.clusters]
                                 .sort((a, b) => (b.max_fused_prob || 0) - (a.max_fused_prob || 0))
-                                .slice(0, 10)
+                                .slice(0, subnetLimit)
                                 .map((entry, index) => {
                                   const prob = entry.max_fused_prob || 0;
                                   let fill = chartColors.low;
@@ -1130,44 +1166,47 @@ export default function App() {
                     </div>
                   )}
 
-                  <table className="stream-table">
-                    <thead>
-                      <tr>
-                        <th>Subnet (/24)</th>
-                        <th>Country</th>
-                        <th>BGP ASN / Organization</th>
-                        <th>Tx Count</th>
-                        <th>Avg Fused Risk</th>
-                        <th>Max Fused Risk</th>
-                        <th>Time Span</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {networkClusters.clusters.map((cl, i) => (
-                        <tr key={i}>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: 'var(--accent-indigo)' }}>
-                            {cl.subnet}
-                          </td>
-                          <td>{cl.country}</td>
-                          <td>
-                            <span style={{ fontWeight: '600' }}>{cl.asn}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: '6px' }}>({cl.asn_name})</span>
-                          </td>
-                          <td><strong>{cl.tx_count}</strong></td>
-                          <td>{(cl.avg_fused_prob * 100).toFixed(1)}%</td>
-                          <td>
-                            <span style={{
-                              fontWeight: 'bold',
-                              color: cl.max_fused_prob >= 0.70 ? 'var(--alert-critical)' : cl.max_fused_prob >= 0.50 ? 'var(--alert-high)' : 'var(--alert-low)'
-                            }}>
-                              {(cl.max_fused_prob * 100).toFixed(1)}%
-                            </span>
-                          </td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{cl.time_span_hours} hrs</td>
+                  {/* Contained Scrollable Subnet Table */}
+                  <div className="table-scroll-container" style={{ maxHeight: '280px' }}>
+                    <table className="stream-table">
+                      <thead>
+                        <tr>
+                          <th>Subnet (/24)</th>
+                          <th>Country</th>
+                          <th>BGP ASN / Organization</th>
+                          <th>Tx Count</th>
+                          <th>Avg Fused Risk</th>
+                          <th>Max Fused Risk</th>
+                          <th>Time Span</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {networkClusters.clusters.slice(0, subnetLimit).map((cl, i) => (
+                          <tr key={i}>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: 'var(--accent-indigo)' }}>
+                              {cl.subnet}
+                            </td>
+                            <td>{cl.country}</td>
+                            <td>
+                              <span style={{ fontWeight: '600' }}>{cl.asn}</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginLeft: '6px' }}>({cl.asn_name})</span>
+                            </td>
+                            <td><strong>{cl.tx_count}</strong></td>
+                            <td>{(cl.avg_fused_prob * 100).toFixed(1)}%</td>
+                            <td>
+                              <span style={{
+                                fontWeight: 'bold',
+                                color: cl.max_fused_prob >= 0.70 ? 'var(--alert-critical)' : cl.max_fused_prob >= 0.50 ? 'var(--alert-high)' : 'var(--alert-low)'
+                              }}>
+                                {(cl.max_fused_prob * 100).toFixed(1)}%
+                              </span>
+                            </td>
+                            <td style={{ color: 'var(--text-secondary)' }}>{cl.time_span_hours} hrs</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : (
                 <p style={{ color: 'var(--text-secondary)' }}>Loading coordinated subnet clusters ...</p>
@@ -1177,42 +1216,30 @@ export default function App() {
             {/* Section 2: Top Fused Alerts */}
             <div className="glass-panel">
               <div className="panel-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <ShieldAlert size={22} color="var(--alert-critical)" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldAlert size={20} color="var(--alert-critical)" />
                   <h2>Ranked Multimodal Fused Risk Alerts</h2>
                 </div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Fusing Blockchain Graph ML + BGP Network Telemetry (Click TXID to inspect SHAP explanation)
-                </span>
+                <PillSelector
+                  options={[10, 25, 'all']}
+                  value={networkAlertsLimit}
+                  onChange={setNetworkAlertsLimit}
+                  label="Alerts:"
+                />
               </div>
 
               {networkAlerts && networkAlerts.status === 'not_generated_yet' ? (
-                <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '16px', borderRadius: '6px' }}>
+                <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '14px', borderRadius: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={20} color="var(--accent-gold)" />
-                    <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Fused Alerts Not Generated Yet</h3>
+                    <AlertTriangle size={18} color="var(--accent-gold)" />
+                    <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '0.92rem' }}>Fused Alerts Not Generated Yet</h3>
                   </div>
-                  <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
+                  <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0 0', fontSize: '0.85rem' }}>
                     Please run <code>python src/train_combined_risk_model.py</code> to execute multimodal fusion and generate alerts.
                   </p>
                 </div>
               ) : networkAlerts && networkAlerts.alerts ? (
-                <div>
-                  <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
-                    <div style={{ background: 'var(--bg-panel-nested)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>High-Risk Multimodal Alerts:</span>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--alert-critical)' }}>
-                        {networkAlerts.total_matching?.toLocaleString()}
-                      </div>
-                    </div>
-                    <div style={{ background: 'var(--bg-panel-nested)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>Displaying Top:</span>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
-                        {networkAlerts.returned}
-                      </div>
-                    </div>
-                  </div>
-
+                <div className="table-scroll-container" style={{ maxHeight: '380px' }}>
                   <table className="stream-table">
                     <thead>
                       <tr>
@@ -1228,7 +1255,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {networkAlerts.alerts.map((al) => (
+                      {networkAlerts.alerts.slice(0, networkAlertsLimit).map((al) => (
                         <React.Fragment key={al.txid}>
                           <tr>
                             <td 
@@ -1239,7 +1266,7 @@ export default function App() {
                               {al.txid ? `${String(al.txid).slice(0, 16)}...` : 'N/A'}
                             </td>
                             <td style={{ fontFamily: 'var(--font-mono)' }}>{al.src_subnet24}</td>
-                            <td>{al.src_asn} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({al.src_asn_name})</span></td>
+                            <td>{al.src_asn} <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({al.src_asn_name})</span></td>
                             <td>{al.src_country}</td>
                             <td>{(al.blockchain_risk_score * 100).toFixed(1)}%</td>
                             <td>
@@ -1250,15 +1277,15 @@ export default function App() {
                                 background: al.is_correlated_cluster ? 'var(--alert-critical-bg)' : 'var(--bg-panel-nested)',
                                 color: al.is_correlated_cluster ? 'var(--alert-critical)' : 'var(--text-secondary)',
                                 border: `1px solid ${al.is_correlated_cluster ? 'var(--alert-critical-border)' : 'var(--border-color)'}`,
-                                padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold'
+                                padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 'bold'
                               }}>
-                                {al.is_correlated_cluster && <Zap size={12} />}
+                                {al.is_correlated_cluster && <Zap size={11} />}
                                 {al.is_correlated_cluster ? 'CORRELATED' : 'STANDARD'}
                               </span>
                             </td>
                             <td><strong>{(al.fused_prob * 100).toFixed(1)}%</strong></td>
                             <td>
-                              <span style={{ ...getTierBadgeStyle(al.risk_tier), padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                              <span style={{ ...getTierBadgeStyle(al.risk_tier), padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 'bold', textTransform: 'uppercase' }}>
                                 {al.risk_tier}
                               </span>
                             </td>
@@ -1266,10 +1293,10 @@ export default function App() {
                               <button
                                 onClick={() => toggleNetworkTxExpand(al.txid)}
                                 className="btn-action"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
                               >
                                 <span>{expandedNetworkTxid === al.txid ? 'Collapse' : 'Explain'}</span>
-                                {expandedNetworkTxid === al.txid ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                {expandedNetworkTxid === al.txid ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                               </button>
                             </td>
                           </tr>
@@ -1277,30 +1304,30 @@ export default function App() {
                           {/* Expanded Inline XAI Explanation & Evidence */}
                           {expandedNetworkTxid === al.txid && (
                             <tr>
-                              <td colSpan="9" style={{ background: 'var(--bg-panel-nested)', padding: '16px' }}>
+                              <td colSpan="9" style={{ background: 'var(--bg-panel-nested)', padding: '14px' }}>
                                 {networkTxDetail[al.txid] ? (
                                   <div>
-                                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeftWidth: '4px', borderLeftColor: 'var(--accent-indigo)', padding: '12px 16px', borderRadius: '6px', marginBottom: '14px' }}>
+                                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeftWidth: '4px', borderLeftColor: 'var(--accent-indigo)', padding: '10px 14px', borderRadius: '6px', marginBottom: '12px' }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                        <FileSearch size={15} color="var(--accent-indigo)" />
-                                        <span style={{ color: 'var(--accent-indigo)', fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        <FileSearch size={14} color="var(--accent-indigo)" />
+                                        <span style={{ color: 'var(--accent-indigo)', fontSize: '0.72rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                           Forensic Decision Attribution ({networkTxDetail[al.txid].scoring_engine}):
                                         </span>
                                       </div>
-                                      <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', margin: '6px 0 0 0', lineHeight: '1.4' }}>
+                                      <p style={{ color: 'var(--text-primary)', fontSize: '0.85rem', margin: '4px 0 0 0', lineHeight: '1.4' }}>
                                         {networkTxDetail[al.txid].explanation}
                                       </p>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
                                       {/* Top Factors */}
-                                      <div style={{ background: 'var(--bg-card)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                                      <div style={{ background: 'var(--bg-card)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
                                           Top Feature Attributions:
                                         </span>
-                                        <div style={{ marginTop: '8px' }}>
+                                        <div style={{ marginTop: '6px' }}>
                                           {networkTxDetail[al.txid].top_factors?.map((fac, fIdx) => (
-                                            <div key={fIdx} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: '0.85rem' }}>
+                                            <div key={fIdx} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: '0.8rem' }}>
                                               <span style={{ color: 'var(--text-primary)' }}>{fac.label}:</span>
                                               <span style={{ color: fac.contribution > 0 ? 'var(--alert-critical)' : 'var(--alert-low)', fontWeight: 'bold', fontFamily: 'var(--font-mono)' }}>
                                                 {fac.contribution > 0 ? '+' : ''}{fac.contribution.toFixed(4)} ({fac.direction})
@@ -1311,24 +1338,24 @@ export default function App() {
                                       </div>
 
                                       {/* Network Evidence */}
-                                      <div style={{ background: 'var(--bg-card)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                                      <div style={{ background: 'var(--bg-card)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
                                           Network Forensic Evidence:
                                         </span>
-                                        <div style={{ marginTop: '8px', fontSize: '0.85rem' }}>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                                        <div style={{ marginTop: '6px', fontSize: '0.8rem' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
                                             <span style={{ color: 'var(--text-secondary)' }}>Source IP:</span>
                                             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>{networkTxDetail[al.txid].network_evidence?.src_ip}</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
                                             <span style={{ color: 'var(--text-secondary)' }}>Subnet Peer Count:</span>
                                             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>{networkTxDetail[al.txid].network_evidence?.src_subnet24_peer_count} peers</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
                                             <span style={{ color: 'var(--text-secondary)' }}>6h Temporal Cluster Count:</span>
                                             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>{networkTxDetail[al.txid].network_evidence?.time_cluster_peer_count} txs</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
                                             <span style={{ color: 'var(--text-secondary)' }}>ASN Infrastructure:</span>
                                             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>{networkTxDetail[al.txid].network_evidence?.src_asn} ({networkTxDetail[al.txid].network_evidence?.src_asn_name})</span>
                                           </div>
@@ -1337,7 +1364,7 @@ export default function App() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading forensic attribution details ...</p>
+                                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>Loading forensic attribution details ...</p>
                                 )}
                               </td>
                             </tr>
@@ -1358,42 +1385,30 @@ export default function App() {
         {activeTab === 'clusters' && (
           <div className="glass-panel">
             <div className="panel-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Layers size={22} color="var(--accent-cyan)" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={20} color="var(--accent-cyan)" />
                 <h2>Multi-Input Co-Spend Wallet Entity Clusters</h2>
               </div>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Union-Find Clustering on Raw Block Common-Input Heuristic
-              </span>
+              <PillSelector
+                options={[10, 25, 'all']}
+                value={clustersLimit}
+                onChange={setClustersLimit}
+                label="Entities:"
+              />
             </div>
 
             {walletClusters && walletClusters.status === 'not_generated_yet' ? (
-              <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '16px', borderRadius: '6px' }}>
+              <div style={{ background: 'var(--alert-high-bg)', borderLeft: '4px solid var(--accent-gold)', padding: '14px', borderRadius: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AlertTriangle size={20} color="var(--accent-gold)" />
-                  <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>Wallet Clusters Not Generated Yet</h3>
+                  <AlertTriangle size={18} color="var(--accent-gold)" />
+                  <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '0.92rem' }}>Wallet Clusters Not Generated Yet</h3>
                 </div>
-                <p style={{ color: 'var(--text-secondary)', margin: '6px 0 0 0', fontSize: '0.9rem' }}>
+                <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0 0', fontSize: '0.85rem' }}>
                   Please run <code>python src/bitcoin_heuristics.py</code> to execute Union-Find co-spend analysis and generate <code>models/wallet_clusters.csv</code>.
                 </p>
               </div>
             ) : walletClusters && walletClusters.clusters ? (
-              <div>
-                <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
-                  <div style={{ background: 'var(--bg-panel-nested)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>Total Discovered Multi-Address Entities:</span>
-                    <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>
-                      {walletClusters.total_clusters?.toLocaleString()}
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--bg-panel-nested)', padding: '12px 20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600 }}>Displaying Top Largest:</span>
-                    <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
-                      {walletClusters.displayed_count}
-                    </div>
-                  </div>
-                </div>
-
+              <div className="table-scroll-container" style={{ maxHeight: '420px' }}>
                 <table className="stream-table">
                   <thead>
                     <tr>
@@ -1404,12 +1419,12 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {walletClusters.clusters.map((c) => (
+                    {walletClusters.clusters.slice(0, clustersLimit).map((c) => (
                       <React.Fragment key={c.cluster_id}>
                         <tr>
                           <td><strong>{c.cluster_id}</strong></td>
                           <td>
-                            <span style={{ background: 'var(--bg-panel-nested)', color: 'var(--accent-indigo)', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.85rem', border: '1px solid var(--border-color)' }}>
+                            <span style={{ background: 'var(--bg-panel-nested)', color: 'var(--accent-indigo)', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.82rem', border: '1px solid var(--border-color)' }}>
                               {c.size} Addresses
                             </span>
                           </td>
@@ -1420,22 +1435,22 @@ export default function App() {
                             <button
                               onClick={() => toggleClusterExpand(c.cluster_id)}
                               className="btn-action"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
                             >
                               <span>{expandedClusterId === c.cluster_id ? 'Collapse' : 'Expand Addresses'}</span>
-                              {expandedClusterId === c.cluster_id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              {expandedClusterId === c.cluster_id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                             </button>
                           </td>
                         </tr>
                         {expandedClusterId === c.cluster_id && (
                           <tr>
-                            <td colSpan="4" style={{ background: 'var(--bg-panel-nested)', padding: '16px' }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                            <td colSpan="4" style={{ background: 'var(--bg-panel-nested)', padding: '14px' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
                                 All Member Addresses in {c.cluster_id} ({c.size} Total):
                               </span>
-                              <div style={{ maxHeight: '180px', overflowY: 'auto', marginTop: '8px', background: 'var(--bg-code)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                              <div style={{ maxHeight: '160px', overflowY: 'auto', marginTop: '6px', background: 'var(--bg-code)', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                                 {c.addresses.map((addr, aIdx) => (
-                                  <div key={aIdx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text-secondary)', padding: '3px 0' }}>
+                                  <div key={aIdx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '2px 0' }}>
                                     • {addr}
                                   </div>
                                 ))}
@@ -1458,47 +1473,53 @@ export default function App() {
         {activeTab === 'reports' && (
           <div className="glass-panel">
             <div className="panel-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <BarChart3 size={22} color="var(--accent-gold)" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BarChart3 size={20} color="var(--accent-gold)" />
                 <h2>Model Evaluation & Benchmarks</h2>
               </div>
+              <PillSelector
+                options={[10, 25, 'all']}
+                value={benchmarksLimit}
+                onChange={setBenchmarksLimit}
+                label="Filter Views:"
+              />
             </div>
             {benchmarks ? (
               <div>
-                {/* Task 2A: Grouped BarChart for Elliptic Benchmarks */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <Database size={18} color="var(--accent-gold)" />
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
+                {/* Grouped BarChart for Elliptic Benchmarks */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <Database size={16} color="var(--accent-gold)" />
+                  <h3 style={{ fontSize: '0.95rem', color: 'var(--accent-gold)', margin: 0, fontWeight: 700 }}>
                     Elliptic Benchmark Evaluation
                   </h3>
                 </div>
 
                 {benchmarks.elliptic_benchmarks && benchmarks.elliptic_benchmarks.length > 0 && (
-                  <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
-                    <div style={{ width: '100%', height: 320 }}>
+                  <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px' }}>
+                    <div style={{ width: '100%', height: 260 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                          data={benchmarks.elliptic_benchmarks.map(row => ({
+                          data={benchmarks.elliptic_benchmarks.slice(0, benchmarksLimit).map(row => ({
                             name: `${row.Model} (${row.Split})`,
                             Precision: row.Precision !== null && row.Precision !== undefined ? Number(row.Precision.toFixed(4)) : 0,
                             Recall: row.Recall !== null && row.Recall !== undefined ? Number(row.Recall.toFixed(4)) : 0,
                             'F1-Score': row['F1-Score'] !== null && row['F1-Score'] !== undefined ? Number(row['F1-Score'].toFixed(4)) : 0,
                             'ROC-AUC': row['ROC-AUC'] !== null && row['ROC-AUC'] !== undefined ? Number(row['ROC-AUC'].toFixed(4)) : 0,
                           }))}
-                          margin={{ top: 10, right: 30, left: 10, bottom: 35 }}
+                          margin={{ top: 10, right: 25, left: 0, bottom: 25 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
                           <XAxis
                             dataKey="name"
-                            tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
+                            tick={{ fill: chartColors.textSecondary, fontSize: 10 }}
                             axisLine={{ stroke: chartColors.borderColor }}
                             interval={0}
-                            angle={-8}
+                            angle={-6}
                             textAnchor="end"
                           />
                           <YAxis
                             domain={[0, 1.0]}
-                            tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                            tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }}
                             axisLine={{ stroke: chartColors.borderColor }}
                             tickFormatter={(v) => v.toFixed(1)}
                           />
@@ -1506,67 +1527,69 @@ export default function App() {
                           <Legend
                             verticalAlign="top"
                             align="right"
-                            wrapperStyle={{ paddingBottom: '12px' }}
-                            formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
+                            wrapperStyle={{ paddingBottom: '8px' }}
+                            formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.75rem' }}>{value}</span>}
                           />
-                          <Bar dataKey="Precision" fill={chartColors.cyan} radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Recall" fill={chartColors.purple} radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="F1-Score" fill={chartColors.gold} radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="ROC-AUC" fill={chartColors.indigo} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Precision" fill={chartColors.cyan} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="Recall" fill={chartColors.purple} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="F1-Score" fill={chartColors.gold} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="ROC-AUC" fill={chartColors.indigo} radius={[3, 3, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
                 )}
 
-                <table className="stream-table" style={{ marginBottom: '32px' }}>
-                  <thead>
-                    <tr><th>Model</th><th>Split</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>ROC-AUC</th><th>PR-AUC</th></tr>
-                  </thead>
-                  <tbody>
-                    {benchmarks.elliptic_benchmarks.map((row, i) => (
-                      <tr key={i}>
-                        <td>{row.Model}</td><td>{row.Split}</td><td>{row.Precision?.toFixed(4)}</td>
-                        <td>{row.Recall?.toFixed(4)}</td><td><strong>{row['F1-Score']?.toFixed(4)}</strong></td>
-                        <td>{row['ROC-AUC']?.toFixed(4)}</td><td>{row['PR-AUC']?.toFixed(4)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="table-scroll-container" style={{ maxHeight: '200px', marginBottom: '24px' }}>
+                  <table className="stream-table">
+                    <thead>
+                      <tr><th>Model</th><th>Split</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>ROC-AUC</th><th>PR-AUC</th></tr>
+                    </thead>
+                    <tbody>
+                      {benchmarks.elliptic_benchmarks.slice(0, benchmarksLimit).map((row, i) => (
+                        <tr key={i}>
+                          <td>{row.Model}</td><td>{row.Split}</td><td>{row.Precision?.toFixed(4)}</td>
+                          <td>{row.Recall?.toFixed(4)}</td><td><strong>{row['F1-Score']?.toFixed(4)}</strong></td>
+                          <td>{row['ROC-AUC']?.toFixed(4)}</td><td>{row['PR-AUC']?.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-                {/* Task 2B: Grouped BarChart for BABD-13 Benchmarks */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <Sliders size={18} color="var(--accent-cyan)" />
-                  <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
+                {/* Grouped BarChart for BABD-13 Benchmarks */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <Sliders size={16} color="var(--accent-cyan)" />
+                  <h3 style={{ fontSize: '0.95rem', color: 'var(--accent-cyan)', margin: 0, fontWeight: 700 }}>
                     BABD-13 Multi-Class Benchmark Evaluation
                   </h3>
                 </div>
 
                 {benchmarks.babd13_benchmarks && benchmarks.babd13_benchmarks.length > 0 && (
-                  <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
-                    <div style={{ width: '100%', height: 320 }}>
+                  <div style={{ background: 'var(--bg-panel-nested)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px' }}>
+                    <div style={{ width: '100%', height: 260 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
-                          data={benchmarks.babd13_benchmarks.map(row => ({
+                          data={benchmarks.babd13_benchmarks.slice(0, benchmarksLimit).map(row => ({
                             name: `${row.Model} (${row.Split})`,
                             Accuracy: row.Accuracy !== null && row.Accuracy !== undefined ? Number(row.Accuracy.toFixed(4)) : 0,
                             'Macro F1': row['Macro F1'] !== null && row['Macro F1'] !== undefined ? Number(row['Macro F1'].toFixed(4)) : 0,
                             'Weighted F1': row['Weighted F1'] !== null && row['Weighted F1'] !== undefined ? Number(row['Weighted F1'].toFixed(4)) : 0,
                           }))}
-                          margin={{ top: 10, right: 30, left: 10, bottom: 35 }}
+                          margin={{ top: 10, right: 25, left: 0, bottom: 25 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
                           <XAxis
                             dataKey="name"
-                            tick={{ fill: chartColors.textSecondary, fontSize: 11 }}
+                            tick={{ fill: chartColors.textSecondary, fontSize: 10 }}
                             axisLine={{ stroke: chartColors.borderColor }}
                             interval={0}
-                            angle={-8}
+                            angle={-6}
                             textAnchor="end"
                           />
                           <YAxis
                             domain={[0, 1.0]}
-                            tick={{ fill: chartColors.textSecondary, fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                            tick={{ fill: chartColors.textSecondary, fontSize: 10, fontFamily: 'var(--font-mono)' }}
                             axisLine={{ stroke: chartColors.borderColor }}
                             tickFormatter={(v) => v.toFixed(1)}
                           />
@@ -1574,32 +1597,34 @@ export default function App() {
                           <Legend
                             verticalAlign="top"
                             align="right"
-                            wrapperStyle={{ paddingBottom: '12px' }}
-                            formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.8rem' }}>{value}</span>}
+                            wrapperStyle={{ paddingBottom: '8px' }}
+                            formatter={(value) => <span style={{ color: chartColors.textSecondary, fontSize: '0.75rem' }}>{value}</span>}
                           />
-                          <Bar dataKey="Accuracy" fill={chartColors.cyan} radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Macro F1" fill={chartColors.gold} radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Weighted F1" fill={chartColors.indigo} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Accuracy" fill={chartColors.cyan} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="Macro F1" fill={chartColors.gold} radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="Weighted F1" fill={chartColors.indigo} radius={[3, 3, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
                 )}
 
-                <table className="stream-table">
-                  <thead>
-                    <tr><th>Model</th><th>Split</th><th>Accuracy</th><th>Macro F1</th><th>Weighted F1</th><th>Macro Precision</th><th>Macro Recall</th></tr>
-                  </thead>
-                  <tbody>
-                    {benchmarks.babd13_benchmarks.map((row, i) => (
-                      <tr key={i}>
-                        <td>{row.Model}</td><td>{row.Split}</td><td>{row.Accuracy?.toFixed(4)}</td>
-                        <td><strong>{row['Macro F1']?.toFixed(4)}</strong></td><td>{row['Weighted F1']?.toFixed(4)}</td>
-                        <td>{row['Macro Precision']?.toFixed(4)}</td><td>{row['Macro Recall']?.toFixed(4)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="table-scroll-container" style={{ maxHeight: '200px' }}>
+                  <table className="stream-table">
+                    <thead>
+                      <tr><th>Model</th><th>Split</th><th>Accuracy</th><th>Macro F1</th><th>Weighted F1</th><th>Macro Precision</th><th>Macro Recall</th></tr>
+                    </thead>
+                    <tbody>
+                      {benchmarks.babd13_benchmarks.slice(0, benchmarksLimit).map((row, i) => (
+                        <tr key={i}>
+                          <td>{row.Model}</td><td>{row.Split}</td><td>{row.Accuracy?.toFixed(4)}</td>
+                          <td><strong>{row['Macro F1']?.toFixed(4)}</strong></td><td>{row['Weighted F1']?.toFixed(4)}</td>
+                          <td>{row['Macro Precision']?.toFixed(4)}</td><td>{row['Macro Recall']?.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <p style={{ color: 'var(--text-secondary)' }}>Loading benchmark results from FastAPI backend ...</p>
