@@ -189,6 +189,34 @@ def get_kpis():
 
 
 
+def _explain_address(addr_row):
+    """Computes SHAP explainability for address classification."""
+    feat_names = ["total_received", "tx_count", "avg_value_per_tx", "active_duration_sec", "tx_frequency"]
+    feat_vals = [
+        float(addr_row["total_received"]),
+        int(addr_row["tx_count"]),
+        float(addr_row["avg_value_per_tx"]),
+        int(addr_row["active_duration_sec"]),
+        float(addr_row["tx_frequency"])
+    ]
+    explanation_str = "Attributed to distinct on-chain transaction frequency and inflow volume profile."
+    top_factors = []
+    if babd_model_dict and "model" in babd_model_dict:
+        m = babd_model_dict["model"]
+        pred_cat = str(addr_row["predicted_category"])
+        c_idx = int(addr_row["predicted_class_idx"]) if "predicted_class_idx" in addr_row and pd.notna(addr_row["predicted_class_idx"]) else 0
+        exp_res = explain_tree_prediction(m, feat_vals, feat_names, top_n=3, target_class_idx=c_idx, category_name=pred_cat)
+        explanation_str = exp_res.get("summary", explanation_str)
+        top_factors = exp_res.get("top_factors", [])
+    return explanation_str, top_factors
+
+
+def _explain_tx(tx_dict, score):
+    """Generates rule-based heuristic explanation for a transaction."""
+    exp_res = explain_heuristic_prediction(tx_dict, score)
+    return exp_res.get("summary"), exp_res.get("top_factors", [])
+
+
 @app.get("/api/search")
 def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin address")):
     """
@@ -217,25 +245,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
                 pass
 
             if addr_row is not None:
-                # Compute SHAP explainability for address classification
-                feat_names = ["total_received", "tx_count", "avg_value_per_tx", "active_duration_sec", "tx_frequency"]
-                feat_vals = [
-                    float(addr_row["total_received"]),
-                    int(addr_row["tx_count"]),
-                    float(addr_row["avg_value_per_tx"]),
-                    int(addr_row["active_duration_sec"]),
-                    float(addr_row["tx_frequency"])
-                ]
-
-                explanation_str = "Attributed to distinct on-chain transaction frequency and inflow volume profile."
-                top_factors = []
-                if babd_model_dict and "model" in babd_model_dict:
-                    m = babd_model_dict["model"]
-                    pred_cat = str(addr_row["predicted_category"])
-                    c_idx = int(addr_row["predicted_class_idx"]) if "predicted_class_idx" in addr_row and pd.notna(addr_row["predicted_class_idx"]) else 0
-                    exp_res = explain_tree_prediction(m, feat_vals, feat_names, top_n=3, target_class_idx=c_idx, category_name=pred_cat)
-                    explanation_str = exp_res.get("summary", explanation_str)
-                    top_factors = exp_res.get("top_factors", [])
+                explanation_str, top_factors = _explain_address(addr_row)
 
                 return {
                     "found": True,
@@ -294,7 +304,7 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
             is_high_risk = bool(score >= 0.70)
             
             # Generate rule-based heuristic explanation
-            exp_res = explain_heuristic_prediction(tx.to_dict(), score)
+            explanation, top_factors = _explain_tx(tx.to_dict(), score)
 
             return {
                 "found": True,
@@ -304,8 +314,8 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
                 "scoring_engine": "Rule-Based Heuristic Proxy (Fee/Volume/Degree ratios)",
                 "heuristic_score": score,
                 "is_high_risk": is_high_risk,
-                "explanation": exp_res.get("summary"),
-                "top_factors": exp_res.get("top_factors", []),
+                "explanation": explanation,
+                "top_factors": top_factors,
                 "details": {
                     "tx_hash": str(tx["tx_hash"]),
                     "block_height": int(tx["block_height"]),
@@ -317,11 +327,11 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
                 }
             }
 
-    # 3. Not Found response
+    # 3. Not Found response (bounded read)
     sample_txs = []
     if raw_preds_path.exists():
-        df_raw = pd.read_csv(raw_preds_path)
-        sample_txs = df_raw.head(3).to_dict(orient="records")
+        df_raw = pd.read_csv(raw_preds_path, nrows=3)
+        sample_txs = df_raw.to_dict(orient="records")
 
     return {
         "found": False,
@@ -329,6 +339,160 @@ def search_entity(q: str = Query(..., description="Transaction hash or Bitcoin a
         "risk_score_status": "not_found",
         "message": f"No exact match found for '{query_str}'. Please check the hash or address.",
         "sample_transactions": sample_txs
+    }
+
+
+@app.get("/api/graph/{entity_id}")
+def get_graph(entity_id: str):
+    """
+    Returns graph topology (nodes & edges) for address co-spend clusters or single-node transactions.
+    """
+    entity_str = entity_id.strip()
+    is_tx_hash = bool(re.fullmatch(r"^[0-9a-fA-F]{64}$", entity_str))
+    is_btc_address = bool(re.fullmatch(r"^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{20,62}$", entity_str))
+
+    raw_addr_path = MODELS_DIR / "raw_address_predictions.csv"
+    clusters_path = MODELS_DIR / "wallet_clusters.csv"
+    raw_preds_path = MODELS_DIR / "raw_block_predictions.csv"
+
+    def _format_addr_label(addr):
+        if len(addr) > 16:
+            return f"{addr[:8]}...{addr[-6:]}"
+        return addr
+
+    # 1. Address Branch
+    if is_btc_address or (clusters_path.exists() and not is_tx_hash):
+        cluster_siblings = []
+        cluster_id = None
+        if clusters_path.exists():
+            try:
+                df_clusters = pd.read_csv(clusters_path)
+                match_cluster = df_clusters[df_clusters["address"].str.strip() == entity_str]
+                if not match_cluster.empty:
+                    cluster_id = str(match_cluster.iloc[0]["cluster_id"])
+                    cluster_rows = df_clusters[df_clusters["cluster_id"].astype(str) == cluster_id]
+                    # Ensure queried address is at the front
+                    all_addrs = [entity_str] + [a for a in cluster_rows["address"].str.strip().tolist() if a != entity_str]
+                    # Limit cluster nodes to 50 for clean graph visualization
+                    cluster_siblings = all_addrs[:50]
+            except Exception:
+                pass
+
+        # Check raw_address_predictions.csv for scored categories & confidence
+        addr_scores = {}
+        all_target_addrs = set(cluster_siblings) if cluster_siblings else {entity_str}
+
+        if raw_addr_path.exists():
+            try:
+                for chunk in pd.read_csv(raw_addr_path, chunksize=250_000, dtype={"account": str}):
+                    chunk["account_clean"] = chunk["account"].str.strip()
+                    matches = chunk[chunk["account_clean"].isin(all_target_addrs)]
+                    for _, row in matches.iterrows():
+                        addr_scores[row["account_clean"]] = row
+                    if len(addr_scores) == len(all_target_addrs):
+                        break
+            except Exception:
+                pass
+
+        if not cluster_siblings and entity_str not in addr_scores:
+            return {
+                "found": False,
+                "entity_id": entity_str,
+                "message": "No graph data available for this address."
+            }
+
+        # Build nodes
+        nodes = []
+        addrs_to_build = cluster_siblings if cluster_siblings else [entity_str]
+        for addr in addrs_to_build:
+            scored_row = addr_scores.get(addr)
+            risk_score = float(scored_row["model_confidence"]) if scored_row is not None and "model_confidence" in scored_row else None
+            category = str(scored_row["predicted_category"]) if scored_row is not None and "predicted_category" in scored_row else None
+
+            node_obj = {
+                "id": addr,
+                "label": _format_addr_label(addr),
+                "type": "address",
+                "risk_score": risk_score,
+                "category": category,
+                "is_queried": bool(addr == entity_str),
+                "cluster_id": cluster_id
+            }
+
+            if addr == entity_str and scored_row is not None:
+                explanation, top_factors = _explain_address(scored_row)
+                node_obj["explanation"] = explanation
+                node_obj["top_factors"] = top_factors
+            elif addr == entity_str and cluster_id is not None:
+                node_obj["explanation"] = f"Co-spend entity linkage: Address is co-spent with {len(cluster_siblings)-1} sibling addresses under entity cluster {cluster_id}."
+                node_obj["top_factors"] = []
+
+            nodes.append(node_obj)
+
+        # Build star topology edges from queried address to siblings
+        edges = []
+        if cluster_siblings and len(cluster_siblings) > 1:
+            for sibling in cluster_siblings:
+                if sibling != entity_str:
+                    edges.append({
+                        "source": entity_str,
+                        "target": sibling,
+                        "label": "co-spend"
+                    })
+
+        return {
+            "found": True,
+            "entity_id": entity_str,
+            "entity_type": "address",
+            "cluster_id": cluster_id,
+            "nodes": nodes,
+            "edges": edges,
+            "edges_note": None
+        }
+
+    # 2. Transaction Branch
+    if raw_preds_path.exists():
+        tx_row = None
+        try:
+            for chunk in pd.read_csv(raw_preds_path, chunksize=250_000, dtype={"tx_hash": str}):
+                match_tx = chunk[chunk["tx_hash"].str.contains(entity_str, case=False, na=False)]
+                if not match_tx.empty:
+                    tx_row = match_tx.iloc[0]
+                    break
+        except Exception:
+            pass
+
+        if tx_row is not None:
+            tx = tx_row
+            score_col = "heuristic_score" if "heuristic_score" in tx else "fraud_score"
+            score = float(tx[score_col])
+            explanation, top_factors = _explain_tx(tx.to_dict(), score)
+
+            node_obj = {
+                "id": str(tx["tx_hash"]),
+                "label": f"Tx {str(tx['tx_hash'])[:8]}...{str(tx['tx_hash'])[-6:]}",
+                "type": "tx",
+                "risk_score": score,
+                "category": "High Risk Alert" if score >= 0.70 else "Clean / Normal",
+                "value_btc": float(tx.get("value_btc", 0)),
+                "block_height": int(tx.get("block_height", 0)),
+                "explanation": explanation,
+                "top_factors": top_factors
+            }
+
+            return {
+                "found": True,
+                "entity_id": entity_str,
+                "entity_type": "tx",
+                "nodes": [node_obj],
+                "edges": [],
+                "edges_note": "Transaction-level input/output linkage is not currently captured by the ingestion pipeline; only this transaction's own risk profile is shown."
+            }
+
+    return {
+        "found": False,
+        "entity_id": entity_str,
+        "message": f"No transaction or address records found for '{entity_str}'."
     }
 
 

@@ -26,7 +26,8 @@ import {
   Sliders,
   TrendingUp,
   PieChart as PieIcon,
-  Filter
+  Filter,
+  ArrowRight
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -44,6 +45,7 @@ import {
   Legend,
   ReferenceLine
 } from 'recharts';
+import GraphView from './GraphView';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8005';
 const WS_URL = import.meta.env.VITE_WS_URL || (
@@ -139,7 +141,7 @@ const DarkChartTooltip = ({ active, payload, label, valuePrefix = '', valueSuffi
   return null;
 };
 
-// Shared Factor Bar Chart Component for Task 6
+// Shared Factor Bar Chart Component
 function FactorBarChart({ factors, chartColors }) {
   if (!factors || !Array.isArray(factors) || factors.length === 0) return null;
 
@@ -233,6 +235,10 @@ export default function App() {
   const [benchmarks, setBenchmarks] = useState(null);
   const [walletClusters, setWalletClusters] = useState(null);
   const [expandedClusterId, setExpandedClusterId] = useState(null);
+
+  // Graph Investigation State
+  const [graphEntityId, setGraphEntityId] = useState('37sczWKSEWeqJPXj9MijJa2zQhYVqoQ2AG');
+  const [graphInput, setGraphInput] = useState('');
 
   // Network Correlation Alerts & Clusters State
   const [networkAlerts, setNetworkAlerts] = useState(null);
@@ -338,6 +344,13 @@ export default function App() {
     }
   };
 
+  const navigateToGraph = (entity) => {
+    if (!entity) return;
+    setGraphEntityId(entity);
+    setGraphInput(entity);
+    setActiveTab('graph');
+  };
+
   const toggleClusterExpand = (clusterId) => {
     setExpandedClusterId(prev => prev === clusterId ? null : clusterId);
   };
@@ -375,12 +388,6 @@ export default function App() {
     }
   };
 
-  const totalScored = kpis?.total_scored_transactions || 0;
-  const highRiskCount = kpis?.high_risk_alerts || 0;
-  const normalCount = Math.max(0, totalScored - highRiskCount);
-  const highRiskPct = totalScored > 0 ? ((highRiskCount / totalScored) * 100).toFixed(2) : '0.00';
-  const normalPct = totalScored > 0 ? ((normalCount / totalScored) * 100).toFixed(2) : '100.00';
-
   return (
     <div className="app-container">
       {/* Sidebar */}
@@ -403,6 +410,10 @@ export default function App() {
           <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
             <Search size={17} />
             <span>Tx & Address Search</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'graph' ? 'active' : ''}`} onClick={() => setActiveTab('graph')}>
+            <Share2 size={17} />
+            <span>Graph Investigation</span>
           </button>
           <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
             <Network size={17} />
@@ -720,13 +731,23 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => toggleClusterExpand(addressClusterInfo.cluster_id)}
-                    className="btn-action"
-                    style={{ color: 'var(--alert-high)', borderColor: 'var(--alert-high-border)' }}
-                  >
-                    {expandedClusterId === addressClusterInfo.cluster_id ? 'Hide Clustered Addresses' : `View All ${addressClusterInfo.size} Addresses`}
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => navigateToGraph(addressClusterInfo.address || searchQuery)}
+                      className="btn-action"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }}
+                    >
+                      <span>Investigate Graph</span>
+                      <ArrowRight size={13} />
+                    </button>
+                    <button 
+                      onClick={() => toggleClusterExpand(addressClusterInfo.cluster_id)}
+                      className="btn-action"
+                      style={{ color: 'var(--alert-high)', borderColor: 'var(--alert-high-border)' }}
+                    >
+                      {expandedClusterId === addressClusterInfo.cluster_id ? 'Hide Clustered Addresses' : `View All ${addressClusterInfo.size} Addresses`}
+                    </button>
+                  </div>
                 </div>
 
                 {expandedClusterId === addressClusterInfo.cluster_id && (
@@ -752,12 +773,23 @@ export default function App() {
                   searchResult.type === 'address' ? (
                     searchResult.risk_score_status === 'scored' ? (
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <Fingerprint size={18} color="var(--accent-indigo)" />
-                          <h3 style={{ color: 'var(--accent-indigo)', margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
-                            Bitcoin Address Behavioral Intelligence
-                          </h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Fingerprint size={18} color="var(--accent-indigo)" />
+                            <h3 style={{ color: 'var(--accent-indigo)', margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
+                              Bitcoin Address Behavioral Intelligence
+                            </h3>
+                          </div>
+                          <button
+                            onClick={() => navigateToGraph(searchResult.details?.account || searchQuery)}
+                            className="btn-action"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }}
+                          >
+                            <span>Investigate Graph</span>
+                            <ArrowRight size={13} />
+                          </button>
                         </div>
+
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '12px' }}>
                           Engine: {searchResult.scoring_engine}
                         </p>
@@ -800,11 +832,21 @@ export default function App() {
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <Info size={18} color="var(--accent-cyan)" />
-                          <h3 style={{ color: 'var(--accent-cyan)', margin: 0, fontSize: '0.95rem' }}>
-                            Individual Address ML Score: Not Scored
-                          </h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Info size={18} color="var(--accent-cyan)" />
+                            <h3 style={{ color: 'var(--accent-cyan)', margin: 0, fontSize: '0.95rem' }}>
+                              Individual Address ML Score: Not Scored
+                            </h3>
+                          </div>
+                          <button
+                            onClick={() => navigateToGraph(searchQuery)}
+                            className="btn-action"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }}
+                          >
+                            <span>Investigate Graph</span>
+                            <ArrowRight size={13} />
+                          </button>
                         </div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.45', margin: 0 }}>
                           {searchResult.message}
@@ -813,16 +855,27 @@ export default function App() {
                     )
                   ) : (
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        {searchResult.is_high_risk ? (
-                          <AlertOctagon size={20} color="var(--alert-critical)" />
-                        ) : (
-                          <CheckCircle2 size={20} color="var(--alert-low)" />
-                        )}
-                        <h3 style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
-                          {searchResult.is_high_risk ? 'HIGH HEURISTIC RISK ALERT' : 'CLEAN TRANSACTION'}
-                        </h3>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {searchResult.is_high_risk ? (
+                            <AlertOctagon size={20} color="var(--alert-critical)" />
+                          ) : (
+                            <CheckCircle2 size={20} color="var(--alert-low)" />
+                          )}
+                          <h3 style={{ color: searchResult.is_high_risk ? 'var(--alert-critical)' : 'var(--alert-low)', margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
+                            {searchResult.is_high_risk ? 'HIGH HEURISTIC RISK ALERT' : 'CLEAN TRANSACTION'}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => navigateToGraph(searchResult.details?.tx_hash || searchQuery)}
+                          className="btn-action"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }}
+                        >
+                          <span>Investigate Graph</span>
+                          <ArrowRight size={13} />
+                        </button>
                       </div>
+
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '10px' }}>
                         Engine: {searchResult.scoring_engine}
                       </p>
@@ -873,7 +926,76 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 4: Network Correlation Alerts */}
+        {/* Tab 4: Graph Investigation (Cytoscape) */}
+        {activeTab === 'graph' && (
+          <div className="glass-panel">
+            <div className="panel-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Share2 size={20} color="var(--accent-cyan)" />
+                <h2>Entity Graph & Co-Spend Cluster Visualizer</h2>
+              </div>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                Interactive Node-Link Topology on Real Blockchain Co-Spend Entities
+              </span>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (graphInput.trim()) {
+                  setGraphEntityId(graphInput.trim());
+                }
+              }}
+              className="search-box"
+              style={{ marginBottom: '12px' }}
+            >
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Enter Bitcoin Address (e.g. 37sczWKSEWeqJPXj9MijJa2zQhYVqoQ2AG) or Transaction Hash"
+                value={graphInput}
+                onChange={(e) => setGraphInput(e.target.value)}
+              />
+              <button type="submit" className="search-btn">Investigate Entity</button>
+            </form>
+
+            {/* Quick Sample Chips for One-Click Demos */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Quick Samples:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setGraphInput('37sczWKSEWeqJPXj9MijJa2zQhYVqoQ2AG');
+                  setGraphEntityId('37sczWKSEWeqJPXj9MijJa2zQhYVqoQ2AG');
+                }}
+                className="btn-action"
+                style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+              >
+                CL-00001 Lead Address (Co-Spend Cluster)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGraphInput('3P2uLvCJdRn9DQvJvXAdoeHeikoJSPj2sX');
+                  setGraphEntityId('3P2uLvCJdRn9DQvJvXAdoeHeikoJSPj2sX');
+                }}
+                className="btn-action"
+                style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+              >
+                Sibling Address in Cluster
+              </button>
+            </div>
+
+            <GraphView
+              entityId={graphEntityId}
+              apiBase={API_BASE}
+              chartColors={chartColors}
+              FactorBarChartComponent={FactorBarChart}
+            />
+          </div>
+        )}
+
+        {/* Tab 5: Network Correlation Alerts */}
         {activeTab === 'network' && (
           <div>
             {/* Section 1: Cross-Layer Cluster Summary */}
@@ -1125,14 +1247,25 @@ export default function App() {
                               </span>
                             </td>
                             <td>
-                              <button
-                                onClick={() => toggleNetworkTxExpand(al.txid)}
-                                className="btn-action"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                              >
-                                <span>{expandedNetworkTxid === al.txid ? 'Collapse' : 'Explain'}</span>
-                                {expandedNetworkTxid === al.txid ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                              </button>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                  onClick={() => navigateToGraph(al.txid)}
+                                  className="btn-action"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: 'var(--accent-cyan)' }}
+                                  title="Investigate in Node Graph"
+                                >
+                                  <span>Graph</span>
+                                  <ArrowRight size={11} />
+                                </button>
+                                <button
+                                  onClick={() => toggleNetworkTxExpand(al.txid)}
+                                  className="btn-action"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                >
+                                  <span>{expandedNetworkTxid === al.txid ? 'Collapse' : 'Explain'}</span>
+                                  {expandedNetworkTxid === al.txid ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                </button>
+                              </div>
                             </td>
                           </tr>
 
@@ -1216,7 +1349,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 5: Wallet Clusters */}
+        {/* Tab 6: Wallet Clusters */}
         {activeTab === 'clusters' && (
           <div className="glass-panel">
             <div className="panel-header">
@@ -1267,14 +1400,25 @@ export default function App() {
                             {c.addresses[0] ? `${c.addresses[0].slice(0, 24)}...` : 'N/A'}
                           </td>
                           <td>
-                            <button
-                              onClick={() => toggleClusterExpand(c.cluster_id)}
-                              className="btn-action"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                            >
-                              <span>{expandedClusterId === c.cluster_id ? 'Collapse' : 'Expand Addresses'}</span>
-                              {expandedClusterId === c.cluster_id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                onClick={() => navigateToGraph(c.addresses[0])}
+                                className="btn-action"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--accent-cyan)', borderColor: 'var(--accent-cyan)' }}
+                                title="Visualize Cluster Topology in Node Graph"
+                              >
+                                <span>Graph</span>
+                                <ArrowRight size={12} />
+                              </button>
+                              <button
+                                onClick={() => toggleClusterExpand(c.cluster_id)}
+                                className="btn-action"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                              >
+                                <span>{expandedClusterId === c.cluster_id ? 'Collapse' : 'Expand'}</span>
+                                {expandedClusterId === c.cluster_id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         {expandedClusterId === c.cluster_id && (
@@ -1285,8 +1429,15 @@ export default function App() {
                               </span>
                               <div style={{ maxHeight: '160px', overflowY: 'auto', marginTop: '6px', background: 'var(--bg-code)', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                                 {c.addresses.map((addr, aIdx) => (
-                                  <div key={aIdx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '2px 0' }}>
-                                    • {addr}
+                                  <div key={aIdx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>• {addr}</span>
+                                    <button
+                                      onClick={() => navigateToGraph(addr)}
+                                      className="btn-action"
+                                      style={{ padding: '1px 6px', fontSize: '0.72rem', color: 'var(--accent-cyan)' }}
+                                    >
+                                      Graph →
+                                    </button>
                                   </div>
                                 ))}
                               </div>
@@ -1304,7 +1455,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 6: Benchmarks */}
+        {/* Tab 7: Benchmarks */}
         {activeTab === 'reports' && (
           <div className="glass-panel">
             <div className="panel-header">
