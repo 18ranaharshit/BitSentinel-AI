@@ -392,100 +392,41 @@ export default function App() {
     <div className="app-container">
       {/* Sidebar */}
       <div className="sidebar">
-        <div className="sidebar-top">
-          <div className="brand">
-            <div className="brand-icon">
-              <ShieldAlert size={20} color="var(--accent-gold)" />
-            </div>
-            <div className="brand-text-wrap">
-              <span className="brand-title">BitSentinel-AI</span>
-              <span className="brand-subtitle">NTRO Cyber Intelligence</span>
-            </div>
+        <div className="brand">
+          <div className="brand-icon">
+            <ShieldAlert size={18} color="var(--accent-gold)" />
           </div>
-
-          <div>
-            <div className="nav-section-label">Operational Surveillance</div>
-            <div className="nav-menu">
-              <button className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-                <div className="nav-item-inner">
-                  <LayoutDashboard size={16} />
-                  <span>Dashboard KPIs</span>
-                </div>
-              </button>
-              <button className={`nav-item ${activeTab === 'stream' ? 'active' : ''}`} onClick={() => setActiveTab('stream')}>
-                <div className="nav-item-inner">
-                  <Radio size={16} />
-                  <span>Live WebSocket Ticker</span>
-                </div>
-                <span className="nav-badge" style={{ background: wsConnected ? 'var(--alert-low-bg)' : 'var(--alert-critical-bg)', color: wsConnected ? 'var(--alert-low)' : 'var(--alert-critical)', border: `1px solid ${wsConnected ? 'var(--alert-low-border)' : 'var(--alert-critical-border)'}` }}>
-                  {wsConnected ? 'LIVE' : 'OFFLINE'}
-                </span>
-              </button>
-              <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
-                <div className="nav-item-inner">
-                  <Search size={16} />
-                  <span>Tx & Address Search</span>
-                </div>
-              </button>
-            </div>
-
-            <div className="nav-section-label">Forensic Modules</div>
-            <div className="nav-menu">
-              <button className={`nav-item ${activeTab === 'graph' ? 'active' : ''}`} onClick={() => setActiveTab('graph')}>
-                <div className="nav-item-inner">
-                  <Share2 size={16} />
-                  <span>Graph Explorer</span>
-                </div>
-                <span className="nav-badge" style={{ background: 'rgba(0, 210, 255, 0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(0, 210, 255, 0.3)' }}>
-                  Interactive
-                </span>
-              </button>
-              <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
-                <div className="nav-item-inner">
-                  <Network size={16} />
-                  <span>Network Correlation</span>
-                </div>
-                <span className="nav-badge" style={{ background: 'var(--alert-critical-bg)', color: 'var(--alert-critical)', border: '1px solid var(--alert-critical-border)' }}>
-                  25.8k Alerts
-                </span>
-              </button>
-              <button className={`nav-item ${activeTab === 'clusters' ? 'active' : ''}`} onClick={() => setActiveTab('clusters')}>
-                <div className="nav-item-inner">
-                  <Layers size={16} />
-                  <span>Wallet Clusters</span>
-                </div>
-                <span className="nav-badge" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)' }}>
-                  46k+
-                </span>
-              </button>
-              <button className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
-                <div className="nav-item-inner">
-                  <BarChart3 size={16} />
-                  <span>Model Benchmarks</span>
-                </div>
-              </button>
-            </div>
-          </div>
+          <span>BitSentinel-AI</span>
         </div>
-
-        {/* Sidebar Footer Telemetry Status */}
-        <div className="sidebar-footer">
-          <div className="sidebar-footer-header">
-            <span>AI Telemetry Engine</span>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--alert-low)', display: 'inline-block' }}></span>
-          </div>
-          <div className="sidebar-telemetry-item">
-            <span style={{ color: 'var(--text-muted)' }}>GraphSAGE GNN:</span>
-            <span style={{ color: 'var(--accent-cyan)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>Active (F1 0.804)</span>
-          </div>
-          <div className="sidebar-telemetry-item">
-            <span style={{ color: 'var(--text-muted)' }}>BABD-13 RF:</span>
-            <span style={{ color: 'var(--accent-gold)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>96.37% Acc</span>
-          </div>
-          <div className="sidebar-telemetry-item">
-            <span style={{ color: 'var(--text-muted)' }}>BGP Correlation:</span>
-            <span style={{ color: 'var(--alert-low)', fontWeight: 700 }}>Fused</span>
-          </div>
+        <div className="nav-menu">
+          <button className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+            <LayoutDashboard size={17} />
+            <span>Dashboard KPIs</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'stream' ? 'active' : ''}`} onClick={() => setActiveTab('stream')}>
+            <Radio size={17} />
+            <span>Live WebSocket Ticker</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
+            <Search size={17} />
+            <span>Tx & Address Search</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'graph' ? 'active' : ''}`} onClick={() => setActiveTab('graph')}>
+            <Share2 size={17} />
+            <span>Graph Investigation</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'network' ? 'active' : ''}`} onClick={() => setActiveTab('network')}>
+            <Network size={17} />
+            <span>Network Correlation</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'clusters' ? 'active' : ''}`} onClick={() => setActiveTab('clusters')}>
+            <Layers size={17} />
+            <span>Wallet Clusters</span>
+          </button>
+          <button className={`nav-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>
+            <BarChart3 size={17} />
+            <span>Model Benchmarks</span>
+          </button>
         </div>
       </div>
 
@@ -494,23 +435,17 @@ export default function App() {
         {/* Header Bar */}
         <div className="header-bar">
           <div className="header-title">
-            <h1>BitSentinel-AI Threat Intelligence & Telemetry</h1>
-            <p>Multimodal Cross-Layer Correlation • Elliptic GraphSAGE GNN & BABD-13 Behavioral ML</p>
+            <h1>BitSentinel-AI Monitoring & Telemetry Platform</h1>
+            <p>Multimodal Cross-Layer Correlation, Elliptic GraphSAGE GNN & BABD-13 Behavioral ML</p>
           </div>
-          <div className="header-actions">
-            <div className="clearance-pill">
-              <ShieldAlert size={14} color="var(--accent-gold)" />
-              <span>NTRO Cyber Ops • Clearance L4</span>
-            </div>
-            <div className="status-badge">
-              <div className="status-dot" style={{ background: wsConnected ? 'var(--alert-low)' : 'var(--alert-critical)' }}></div>
-              <Activity size={13} style={{ marginLeft: '2px' }} />
-              <span>{wsConnected ? 'WebSocket Live Feed (4.2ms)' : 'REST Mode Active'}</span>
-            </div>
+          <div className="status-badge">
+            <div className="status-dot" style={{ background: wsConnected ? 'var(--alert-low)' : 'var(--alert-critical)' }}></div>
+            <Activity size={13} style={{ marginLeft: '2px' }} />
+            <span>{wsConnected ? 'WebSocket Live Feed Active' : 'REST Mode Active'}</span>
           </div>
         </div>
 
-        {/* Top KPI Cards */}
+        {/* Top KPI Cards (Compact) */}
         {kpis && kpis.status === 'no_predictions_yet' ? (
           <div className="glass-panel" style={{ marginBottom: '18px', borderLeft: '4px solid var(--accent-gold)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -524,75 +459,37 @@ export default function App() {
         ) : (
           <div className="kpi-grid">
             <div className="kpi-card kpi-total">
-              <div className="kpi-header">
-                <span className="kpi-title">Total Scored Txs</span>
-                <div className="kpi-icon-wrap" style={{ background: 'rgba(129, 140, 248, 0.15)', color: 'var(--accent-indigo)' }}>
-                  <Database size={15} />
-                </div>
-              </div>
+              <span className="kpi-title">Total Scored Txs</span>
               <span className="kpi-value">{kpis ? kpis.total_scored_transactions?.toLocaleString() : '...'}</span>
-              <div className="kpi-footer" style={{ color: 'var(--text-muted)' }}>
-                <span>Real-Time Ingestion</span>
-              </div>
             </div>
-
             <div className="kpi-card kpi-alert">
-              <div className="kpi-header">
-                <span className="kpi-title">High-Risk Alerts</span>
-                <div className="kpi-icon-wrap" style={{ background: 'rgba(255, 77, 77, 0.15)', color: 'var(--alert-critical)' }}>
-                  <AlertOctagon size={15} />
-                </div>
-              </div>
+              <span className="kpi-title">High-Risk Alerts</span>
               <span className="kpi-value" style={{ color: 'var(--alert-critical)' }}>
                 {kpis ? kpis.high_risk_alerts?.toLocaleString() : '...'}
               </span>
-              <div className="kpi-footer" style={{ color: 'var(--alert-critical)' }}>
-                <span>{kpis ? `${kpis.risk_ratio_pct}% Alert Ratio` : ''}</span>
-              </div>
+              <span className="kpi-sub" style={{ color: 'var(--alert-critical)' }}>
+                {kpis ? `${kpis.risk_ratio_pct}% Alert Ratio` : ''}
+              </span>
             </div>
-
             <div className="kpi-card kpi-monitored">
-              <div className="kpi-header">
-                <span className="kpi-title">Monitored Volume</span>
-                <div className="kpi-icon-wrap" style={{ background: 'rgba(0, 210, 255, 0.15)', color: 'var(--accent-cyan)' }}>
-                  <TrendingUp size={15} />
-                </div>
-              </div>
-              <span className="kpi-value" style={{ color: 'var(--accent-cyan)' }}>{kpis ? `${formatBtcVolume(kpis.total_monitored_btc_volume)}` : '...'}</span>
-              <div className="kpi-footer" style={{ color: 'var(--text-muted)' }}>
-                <span>On-Chain Flow</span>
-              </div>
+              <span className="kpi-title">Monitored Volume</span>
+              <span className="kpi-value">{kpis ? `${formatBtcVolume(kpis.total_monitored_btc_volume)}` : '...'}</span>
             </div>
-
             <div className="kpi-card kpi-flagged">
-              <div className="kpi-header">
-                <span className="kpi-title">Flagged Volume</span>
-                <div className="kpi-icon-wrap" style={{ background: 'rgba(247, 147, 26, 0.15)', color: 'var(--accent-gold)' }}>
-                  <Zap size={15} />
-                </div>
-              </div>
+              <span className="kpi-title">Flagged Volume</span>
               <span className="kpi-value" style={{ color: 'var(--accent-gold)' }}>
                 {kpis ? `${formatBtcVolume(kpis.flagged_high_risk_btc_volume)}` : '...'}
               </span>
-              <div className="kpi-footer" style={{ color: 'var(--accent-gold)' }}>
-                <span>Suspicious Traffic</span>
-              </div>
             </div>
-
             {kpis && kpis.coverage_pct !== null && kpis.coverage_pct !== undefined && (
               <div className="kpi-card kpi-coverage">
-                <div className="kpi-header">
-                  <span className="kpi-title">Dataset Coverage</span>
-                  <div className="kpi-icon-wrap" style={{ background: 'rgba(192, 132, 252, 0.15)', color: 'var(--accent-purple)' }}>
-                    <CheckCircle2 size={15} />
-                  </div>
-                </div>
+                <span className="kpi-title">Dataset Coverage</span>
                 <span className="kpi-value" style={{ color: 'var(--accent-purple)' }}>
                   {kpis.coverage_pct}%
                 </span>
-                <div className="kpi-footer" style={{ color: 'var(--text-muted)' }}>
-                  <span>{kpis.blocks_processed} / {kpis.blocks_available} blocks</span>
-                </div>
+                <span className="kpi-sub">
+                  {kpis.blocks_processed} / {kpis.blocks_available} blocks
+                </span>
               </div>
             )}
           </div>
